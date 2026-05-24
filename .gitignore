@@ -1,0 +1,108 @@
+# -----------------------------------------------------------------------------
+# Python bytecode, caches, and build artifacts
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# -----------------------------------------------------------------------------
+# Virtual environments and local environment files
+# -----------------------------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+conda-meta/
+.env
+.env.*
+!.env.example
+
+# -----------------------------------------------------------------------------
+# IDE/editor files
+# -----------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# -----------------------------------------------------------------------------
+# Jupyter
+# -----------------------------------------------------------------------------
+.ipynb_checkpoints/
+*.ipynb
+
+# -----------------------------------------------------------------------------
+# Datasets and local preprocessing outputs
+#
+# The training/evaluation datasets are large and machine-local. Keep lightweight
+# dataset loader code in git, but do not track raw images, extracted benchmark
+# files, partial extractions, or processed caches.
+# -----------------------------------------------------------------------------
+data/raw/
+data/processed/
+data/cache/
+downloads/
+
+# -----------------------------------------------------------------------------
+# Model checkpoints and serialized training artifacts
+# -----------------------------------------------------------------------------
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+
+# -----------------------------------------------------------------------------
+# Logs, cluster outputs, and experiment trackers
+# -----------------------------------------------------------------------------
+logs/
+wandb/
+runs/
+lightning_logs/
+slurm-*.out
+slurm-*.err
+*.out
+*.err
+events.out.tfevents.*
+
+# -----------------------------------------------------------------------------
+# Generated evaluation/training outputs
+#
+# Most result folders contain generated metrics, embeddings, and exploratory
+# artifacts. The curated report plots are allowed below so the README can point
+# to reproducible visual findings without committing all experiment output.
+# -----------------------------------------------------------------------------
+results/*
+!results/plots/
+!results/plots/*.png
+!results/plots/*.json
+
+# Large embedding dumps and numeric artifacts, wherever they appear
+*.npz
+*.npy
+*.h5
+*.hdf5
+
+# -----------------------------------------------------------------------------
+# Temporary and system files
+# -----------------------------------------------------------------------------
+*.tmp
+*.temp
+*.bak
+*.orig
+.DS_Store
+Thumbs.db

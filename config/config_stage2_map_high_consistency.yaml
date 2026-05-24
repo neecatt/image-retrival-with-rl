@@ -1,0 +1,86 @@
+# Stage 2 variant: mAP reward + higher consistency (stays closer to Stage 1).
+# Use: python train.py --config config/config_stage2_map_high_consistency.yaml --stage2_only --resume checkpoints/stage1_epoch_12_best.pth --stage2_epochs 3
+
+dataset:
+  name: "sfm120k"
+  root_dir: "./data/raw"
+  processed_dir: "./data/processed"
+  image_size: 224
+  query_size: 1024
+
+model:
+  architecture: "resnet50"
+  pretrained: true
+  embedding_dim: 512
+  pooling: "gem"
+  gem_power: 3.0
+  normalize_embeddings: true
+  freeze_backbone: false
+
+training:
+  stage1:
+    epochs: 15
+    batch_size: 32
+    learning_rate: 0.0001
+    weight_decay: 0.0001
+    optimizer: "adam"
+    scheduler: "cosine"
+    loss: "fastap"
+    triplet_margin: 0.2
+    fastap_num_bins: 10
+  stage2:
+    epochs: 3
+    batch_size: 16
+    learning_rate: 0.000001
+    weight_decay: 0.00001
+    optimizer: "adam"
+    algorithm: "reinforce"
+    reward_metric: "map"
+    reward_k: [1, 5, 10]
+    baseline: "moving_average"
+    baseline_momentum: 0.95
+    sample_std: 0.01
+    consistency_weight: 8.0
+    entropy_coef: 0.0
+    value_loss_coef: 0.0
+    gamma: 0.99
+    gradient_clip: 1.0
+
+augmentation:
+  train:
+    random_crop: true
+    random_flip: true
+    color_jitter: true
+    brightness: 0.2
+    contrast: 0.2
+    saturation: 0.2
+    hue: 0.1
+    rotation: 10
+  val:
+    center_crop: true
+
+mining:
+  strategy: "semi_hard"
+  batch_mining: true
+
+evaluation:
+  metrics: ["map", "recall@1", "recall@5", "recall@10", "ndcg@10"]
+  reranking: false
+  query_expansion: false
+
+system:
+  num_workers: 4
+  pin_memory: true
+  cuda: true
+  seed: 42
+  checkpoint_dir: "/home/hpc/iwi5/iwi5354h/Image Retrieval with RL/checkpoints/stage2_map_high_consistency"
+  log_dir: "/home/hpc/iwi5/iwi5354h/Image Retrieval with RL/logs"
+  results_dir: "/home/hpc/iwi5/iwi5354h/Image Retrieval with RL/results"
+  save_frequency: 5
+
+logging:
+  use_wandb: false
+  wandb_project: "image-retrieval-rl"
+  wandb_entity: null
+  log_frequency: 10
+  save_embeddings: true

@@ -1,0 +1,16 @@
+[
+  {
+    "label": "Improves top-3\n0/3 \u2192 2/3 relevant",
+    "query_index": 65,
+    "stage1_ap": 0.033038656973637275,
+    "stage2_ap": 0.14658490453207598,
+    "delta_ap": 0.1135462475584387
+  },
+  {
+    "label": "Improves top-3\n2/3 \u2192 3/3 relevant",
+    "query_index": 62,
+    "stage1_ap": 0.09016047338751951,
+    "stage2_ap": 0.13143859996841814,
+    "delta_ap": 0.04127812658089863
+  }
+]

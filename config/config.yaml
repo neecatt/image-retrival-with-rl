@@ -1,0 +1,106 @@
+# Configuration file for Image Retrieval with RL
+
+# Dataset Configuration
+dataset:
+  name: "sfm120k"  # Options: sfm120k (recommended), roxford5k, rparis6k, or ["roxford5k","rparis6k"]
+  root_dir: "./data/raw"
+  processed_dir: "./data/processed"
+  # Train + val for both Stage 1 and Stage 2 (same loaders; only batch_size differs per stage).
+  image_size: 1024
+  query_size: 1024  # ROxford/RParis benchmark eval (shorter edge, aspect-preserving)
+  # Omit to match image_size; set lower if you want smaller val only
+  val_image_size: 1024
+  
+# Model Configuration
+model:
+  architecture: "resnet50"  # Options: resnet50, resnet101, efficientnet_b0, vit_base
+  pretrained: true
+  embedding_dim: 512
+  pooling: "gem"  # Options: avg, max, gem (Generalized Mean Pooling)
+  gem_power: 3.0
+  normalize_embeddings: true
+  freeze_backbone: false  # Whether to freeze backbone during initial training
+  
+# Training Configuration
+training:
+  # Stage 1: Standard metric learning
+  stage1:
+    epochs: 50
+    batch_size: 8
+    learning_rate: 0.0001
+    weight_decay: 0.0001
+    optimizer: "adam"  # Options: adam, sgd, adamw
+    scheduler: "cosine"  # Options: cosine, step, plateau
+    loss: "fastap"  # Options: fastap, triplet, multisimilarity, arcface
+    
+    # Loss-specific parameters
+    triplet_margin: 0.2
+    fastap_num_bins: 10
+    
+    # Enable mixed precision for memory savings
+    use_amp: true
+    
+  # Stage 2: RL fine-tuning — same 1024² data as Stage 1 (dataset.image_size / val_image_size)
+  stage2:
+    epochs: 30
+    batch_size: 8
+    learning_rate: 0.000002
+    weight_decay: 0.00001
+    optimizer: "adam"
+
+    algorithm: "reinforce"
+    reward_metric: "map"
+    reward_k: [1, 5, 10]
+    baseline: "moving_average"
+    baseline_momentum: 0.95
+    sample_std: 0.01
+    consistency_weight: 5.0
+    memory_bank_size: 4096
+    warmup_steps: 1000
+    gradient_clip: 1.0
+    
+# Data Augmentation
+augmentation:
+  train:
+    random_crop: true
+    random_flip: true
+    color_jitter: true
+    brightness: 0.2
+    contrast: 0.2
+    saturation: 0.2
+    hue: 0.1
+    rotation: 10
+    
+  val:
+    center_crop: true
+    
+# Mining Strategy (for triplet/pair mining)
+mining:
+  strategy: "semi_hard"  # Options: hard, semi_hard, all, distance_weighted
+  batch_mining: true
+  
+# Evaluation Configuration
+evaluation:
+  metrics: ["map", "recall@1", "recall@5", "recall@10", "ndcg@10"]
+  reranking: false
+  query_expansion: false
+  
+# System Configuration
+system:
+  num_workers: 4
+  pin_memory: true
+  cuda: true
+  seed: 42
+  checkpoint_dir: "/home/hpc/iwi5/iwi5354h/Image Retrieval with RL/checkpoints"
+  log_dir: "/home/hpc/iwi5/iwi5354h/Image Retrieval with RL/logs"
+  results_dir: "/home/hpc/iwi5/iwi5354h/Image Retrieval with RL/results"
+  save_frequency: 5  # Save checkpoint every N epochs
+  
+# Logging
+logging:
+  use_wandb: false
+  wandb_project: "image-retrieval-rl"
+  wandb_entity: null
+  log_frequency: 10  # Log every N batches
+  save_embeddings: true
+
