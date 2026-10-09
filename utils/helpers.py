@@ -177,8 +177,10 @@ def load_checkpoint(
     # Load checkpoint
     checkpoint = torch.load(filepath, map_location=device)
     
-    # Load model state
-    model.load_state_dict(checkpoint['model_state_dict'])
+    # Load model state into the underlying module, so checkpoints saved with or
+    # without torch.compile ("_orig_mod." prefix) load into either kind of model
+    state_dict = {k.removeprefix('_orig_mod.'): v for k, v in checkpoint['model_state_dict'].items()}
+    getattr(model, '_orig_mod', model).load_state_dict(state_dict)
     print(f"Model loaded from {filepath}")
     
     # Load optimizer state if provided
