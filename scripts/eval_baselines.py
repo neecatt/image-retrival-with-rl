@@ -18,7 +18,7 @@ import torchvision.transforms as T
 from torch.utils.data import DataLoader
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from data.dataset import RevisitedDataset, get_transforms                # noqa: E402
+from data.dataset import LongSideResize, RevisitedDataset, get_transforms  # noqa: E402
 from data.dataset_sfm120k import load_sfm120k                           # noqa: E402
 from evaluate import create_model_from_checkpoint                       # noqa: E402
 from evaluation.revisited_ap import revisited_map                       # noqa: E402
@@ -26,16 +26,6 @@ from evaluation.sfm_val import evaluate_sfm_val                         # noqa: 
 from models.embedding_net import EmbeddingNet                           # noqa: E402
 
 NORM = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-
-
-class LongSideResize:
-    def __init__(self, size):
-        self.size = size
-
-    def __call__(self, img):
-        w, h = img.size
-        s = self.size / max(w, h)
-        return img.resize((max(1, round(w * s)), max(1, round(h * s))), resample=2)  # bilinear
 
 
 def build_model(spec, device):

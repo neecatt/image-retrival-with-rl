@@ -443,19 +443,38 @@ def get_transforms(
     return transforms.Compose(transform_list)
 
 
-def get_revisited_benchmark_transforms(image_size: int = 1024) -> transforms.Compose:
-    """Resize shorter edge to image_size, keep aspect ratio (no square crop).
+class LongSideResize:
+    """Resize so the longer image side equals `size`, keeping the aspect ratio (PIL bilinear)."""
 
-    Use with batch_size=1 only — tensors have variable H/W. For ROxford/RParis
-    benchmark evaluation where GeM handles variable spatial sizes.
+    def __init__(self, size: int):
+        self.size = size
+
+    def __call__(self, img):
+        w, h = img.size
+        s = self.size / max(w, h)
+        return img.resize((max(1, round(w * s)), max(1, round(h * s))), resample=Image.BILINEAR)
+
+
+def get_revisited_benchmark_transforms(image_size: int = 1024, resize: str = 'long') -> transforms.Compose:
+    """Single-scale Revisited benchmark transform, aspect ratio kept (no square crop).
+
+    resize='long' (default) sets the longer side to image_size, the usual
+    protocol for ROxford/RParis; 'short' sets the shorter side (the previous
+    behaviour, which scored Stage 1 ROxford Medium ~10 points lower).
+    Use with batch_size=1 only — tensors have variable H/W.
     """
     normalize = transforms.Normalize(
         mean=[0.485, 0.456, 0.406],
         std=[0.229, 0.224, 0.225],
     )
+    if resize == 'long':
+        resize_tf = LongSideResize(image_size)
+    elif resize == 'short':
+        resize_tf = transforms.Resize(image_size)
+    else:
+        raise ValueError(f"Unknown resize mode: {resize}")
     return transforms.Compose([
-        transforms.Resize(image_size),
+        resize_tf,
         transforms.ToTensor(),
         normalize,
     ])
-
