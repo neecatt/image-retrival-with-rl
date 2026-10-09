@@ -38,6 +38,26 @@ Question: does reward tuning (RL) beat simply continuing metric learning (ML) fr
 - RL grid (sample_std 0.05, no clipping): consistency weight 5,000 / 500 at lr 2e-6, weight 5 at lr 5e-7, and weight 5,000 at batch 32.
 - RL costs more per image (a second sample for the baseline plus the frozen reference forward pass); GPU time is recorded per run.
 
+### C3. Validation grid results (jobs 4518353–4518359; init = seed-42 Stage 1, SfM val 83.03)
+
+| Arm | Setting | SfM val after epoch 1 / 2 | Best Δ | Wall time |
+|---|---|---|---|---|
+| ML | lr 1e-6 | 82.82 / **82.96** | −0.07 | 18 min |
+| ML | lr 3e-6 | 82.67 / 82.75 | −0.28 | 18 min |
+| ML | lr 1e-5 | 82.14 / 81.98 | −0.89 | 17 min |
+| RL | batch 8, consistency 5,000, lr 2e-6 | **83.15** / 82.98 | +0.12 | 38 min |
+| RL | batch 8, consistency 500, lr 2e-6 | 82.51 / 82.41 | −0.52 | 39 min |
+| RL | batch 8, consistency 5, lr 5e-7 | 82.75 / 82.56 | −0.28 | 38 min |
+| RL | batch 32, consistency 5,000, lr 2e-6 | **83.25** / killed | +0.22 | 34 min (OOM) |
+
+- All differences are within a few tenths of a point from one seed; whether any is real needs the seed repeats.
+- Selected on validation: ML lr 1e-6; RL batch 32, consistency 5,000, lr 2e-6.
+- **Host-memory OOM:** the batch-32 RL job was killed by the host-RAM limit (~86.7 GB of 92 GB) during validation after epoch 2; the batch-8 RL job peaked at the same level. Likely cause: 16 loader workers on each of three loaders. Seed runs use 8 workers. The epoch-1 checkpoint survived.
+- With consistency weight 5,000 the consistency gradient (13–24) is now comparable to the policy gradient (60–120), unlike pilot 1.
+
+### C4. Seed repeats with final evaluation (jobs 4518806–4518811)
+Best setting of each arm from each of the three Stage 1 seeds, benchmarks scored once on the validation-selected epoch. Results pending.
+
 
 ### B3. Stage 1 pilot: batch size and learning rate (job 4515831, 50 min)
 From ImageNet, batch 32 = 8 landmarks × 4 images (old runs: 8 = 2 × 4), 1024² crops, FastAP, 3 short epochs of 1,000 batches (~96k images, about one pass over SfM-120k). SfM-120k val mAP after each epoch; no benchmark evaluated.
