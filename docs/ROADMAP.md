@@ -35,7 +35,8 @@ Status: correctness work largely complete; reproducible baseline in progress (20
 
 - Done: estimator audit and fix (sampled action detached; gradient magnitude 0.047× → 0.973× of truth on a tractable problem), single baseline code path, official Revisited AP (matches revisitop exactly), longer-side resize protocol, ROxford-driven selection removed, deterministic SfM-120k val mAP as the selection metric, gradient diagnostics in RL training.
 - Done: corrected reference numbers for the historical checkpoints (job 4515706). Historical Stage 1: SfM val 64.59, ROxford M/H 28.30/12.21, RParis M/H 43.75/19.80; it beats untrained ImageNet R50-GeM by only ~4 ROxford Medium points. Historical Stage 2 (`stage2_epoch_5.pth`) is worse than Stage 1 on every metric; README Stage 2 gains are not reproduced.
-- In progress: new Stage 1 baseline (batch 32 = 8 landmarks per batch, lr 1e-5, chosen on SfM val in pilot 4515831). Full 20-epoch runs from job 4516394.
+- Done 2026-10-09: new ResNet50 Stage 1 baseline, 3 seeds (batch 32 = 8 landmarks, lr 1e-5): ROxford M/H 42.27 ± 1.17 / 19.41 ± 0.70, RParis M/H 59.87 ± 0.95 / 32.94 ± 0.70 (old: 28.30/12.21, 43.75/19.80). Selected on SfM val; benchmarks scored once.
+- In progress: matched comparison of continued metric learning vs reward tuning from the new Stage 1 (validation grid jobs 4518353–4518359, then 3 seeds per arm).
 - Open finding: in pilots so far, Stage 2 RL does not improve held-out SfM val mAP (−1.6 to −4.0 without anchoring; −0.01 to +0.39 with strong anchoring, one seed).
 
 - Audit normalized-Gaussian sampling versus the current cosine/von-Mises–Fisher-style proxy density, sampled-action detachment for score-function gradients, baseline independence, and stochastic gallery gradient treatment. Validate a consistent estimator on a tractable small problem.
