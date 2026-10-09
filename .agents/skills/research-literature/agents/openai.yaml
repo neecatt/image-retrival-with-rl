@@ -1,0 +1,4 @@
+interface:
+  display_name: "Retrieval Research Literature"
+  short_description: "Review retrieval papers and test research gaps"
+  default_prompt: "Use $research-literature to compare relevant papers and identify a testable research gap."

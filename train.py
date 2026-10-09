@@ -596,13 +596,17 @@ def train_stage2(model, dataloaders, config, device, logger):
         use_amp=config['training']['stage2'].get('use_amp', False)
     )
     
-    # Check if ROxford5k is available for benchmark evaluation
+    # Per-epoch ROxford5k monitoring is diagnostic only and off by default:
+    # picking checkpoints on the final test benchmark leaks test information.
+    # Model selection uses the SfM-120k validation reward below.
     roxford_root = os.path.join(config['dataset']['root_dir'], 'roxford5k')
-    has_roxford = os.path.isfile(os.path.join(roxford_root, 'roxford5k.pkl'))
+    has_roxford = (stage2_config.get('monitor_benchmark', False)
+                   and os.path.isfile(os.path.join(roxford_root, 'roxford5k.pkl')))
     if has_roxford:
-        print("ROxford5k found — will evaluate on benchmark each epoch")
+        print("monitor_benchmark=true — evaluating ROxford5k each epoch "
+              "(diagnostic only; do not select checkpoints with it)")
     else:
-        print("ROxford5k not found — skipping benchmark eval during training")
+        print("Benchmark monitoring off — checkpoint selection uses SfM-120k validation")
 
     # Training loop
     best_reward = 0.0
