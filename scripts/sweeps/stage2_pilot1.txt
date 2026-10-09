@@ -1,0 +1,6 @@
+# name sample_std gradient_clip learning_rate consistency_weight max_batches  (job 4515798)
+a_sigma0.01_clip1         0.01 1.0 0.000002 5.0 400
+b_sigma0.05_clip1         0.05 1.0 0.000002 5.0 400
+c_sigma0.01_noclip        0.01 0   0.000002 5.0 400
+d_sigma0.05_noclip        0.05 0   0.000002 5.0 400
+e_sigma0.05_clip1_lr1e-5  0.05 1.0 0.00001  5.0 400
