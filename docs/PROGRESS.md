@@ -6,12 +6,46 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 
 | # | Problem | Why it matters | Status |
 |---|---|---|---|
-| P1 | Stage 1 baseline is far below published numbers: ROxford5k Medium 17.72 / Hard 8.60 mAP (official scoring) vs roughly 60+ Medium reported for GeM-ResNet50 trained on SfM-120k | Any reward-tuning gain on top of a weak baseline is hard to interpret, and reviewers will compare against published baselines | Not diagnosed. Suspects: batch size 8 with PK sampling = only **2 landmarks per batch** (few negatives for FastAP), 1024² centre-crop training, no whitening. Unverified |
-| P2 | Stage 2 hyperparameters were tuned against a gradient ~20× too small (see F1) | `consistency_weight: 5.0` and `lr: 2e-6` are probably badly balanced now | Must be re-tuned on validation, not on ROxford |
+| P1 | Stage 1 baseline is weak: ROxford5k Medium 28.30 / Hard 12.21 (official scoring, long side 1024), only +4.2 Medium over an untrained ImageNet ResNet50-GeM (24.14). Published fine-tuned GeM systems report far higher numbers, though with multi-scale testing and whitening that we do not use | Any reward-tuning gain on top of a weak baseline is hard to interpret | Partly explained (protocol, B1). Training suspects: 2 landmarks per batch, Adam lr 1e-4 on the whole backbone. Pilot job 4515831 is testing batch 32 and lower LR |
+| P2 | **Stage 2 RL lowers held-out SfM val mAP in every setting tried** (B2), and the historical `stage2_epoch_5.pth` is worse than Stage 1 on every metric (B1) | The central claim (RL improves retrieval) is currently not supported | Open. Next: much stronger anchoring (consistency weight ~1000× higher, since it is ~3000× weaker than the policy gradient) and lower LR, then longer runs; also check the reward/memory-bank design |
 | P3 | Checkpoint selection signal is weak: "validation reward" is mAP inside each batch of 8 (gallery of ~4 images), close to 1.0 | Cannot reliably pick the best epoch | Fixed (F5), verified in smoke run 4515494 |
 | P4 | README Stage 1 numbers (16.97 Medium / 3.59 Hard) do not match a rerun of `stage1_epoch_13_best.pth` (18.29 / 9.33 with the old scoring) | Historical results cannot be reproduced as stated | Likely a different checkpoint or older code. The run folders on tinyx have not been copied yet |
-| P5 | RL advantage is tiny: reward and baseline differ by <0.01 on average with `sample_std` 0.01, and the policy loss reaches ±135 so `gradient_clip: 1.0` probably clips every step | The update may be mostly clipped noise, and the consistency term is now negligible | Needs gradient-norm logging and a validation sweep of `sample_std`, clip and consistency weight |
+| P5 | Policy gradient norm is 100–300 vs 0.06–0.08 for the consistency term; `gradient_clip: 1.0` clips 90–100% of steps | The consistency regulariser has no practical effect; updates are clipped to unit norm every step | Measured (B2). Addressed together with P2 |
 | P6 | Gallery embeddings are sampled but receive no policy gradient; memory-bank entries come from older parameters | The objective is "query-only, given a noisy gallery", not full expected AP | Acceptable if stated explicitly in the paper; not changed |
+
+## 2026-10-09: Reference numbers and first pilots
+
+### B1. Reference evaluation under the corrected protocol (job 4515706, 13 min)
+Official Revisited scoring, single scale. SfM-120k val = leave-one-out mAP over 6,403 images (selection metric). `short`/`long` = shorter/longer image side resized to 1024.
+
+| Model | SfM val mAP | ROxf M (short) | ROxf H (short) | ROxf M (long) | ROxf H (long) | RPar M (long) | RPar H (long) |
+|---|---|---|---|---|---|---|---|
+| ImageNet ResNet50 + GeM, no training (2048-d) | 59.12 | 18.09 | 4.90 | 24.14 | 5.66 | 44.76 | 21.16 |
+| Stage 1 `stage1_epoch_13_best.pth` (512-d) | **64.59** | 17.72 | 8.60 | **28.30** | **12.21** | 43.75 | 19.80 |
+| Stage 2 `stage2_epoch_5.pth` (512-d) | 57.73 | 14.30 | 5.46 | 20.40 | 6.01 | 40.22 | 18.81 |
+
+RParis short-side numbers (Medium/Hard): ImageNet 43.14/19.28, Stage 1 40.09/17.82, Stage 2 35.13/17.15.
+
+- **Protocol matters:** resizing by the longer side adds ~10 points to Stage 1 ROxford Medium. `evaluate.py` now does this by default (`dataset.eval_resize: long`, commit 182252c).
+- **Stage 1 barely beats no training:** +5.5 SfM val, +4.2 ROxford Medium and −1.0 RParis Medium versus untrained ImageNet features.
+- **The historical Stage 2 checkpoint is worse than Stage 1 on all metrics.** The README's Stage 2 gains came from `stage2_best_roxford.pth`, which was selected on ROxford (F3) and has not been copied.
+- These are the first reference numbers; they were not used to choose any setting.
+
+### B2. Stage 2 pilot sweep (job 4515798, 16 min; one seed, 400 batches each from Stage 1, warm-up 100 steps)
+Starting point: Stage 1 SfM val mAP **64.59**.
+
+| Run | sample_std | clip | LR | SfM val mAP | Δ vs Stage 1 | policy grad norm | consistency grad norm | steps clipped | mean abs advantage |
+|---|---|---|---|---|---|---|---|---|---|
+| a | 0.01 | 1.0 | 2e-6 | 60.57 | −4.02 | 256 | 0.081 | 90% | 0.026 |
+| b | 0.05 | 1.0 | 2e-6 | 62.50 | −2.09 | 162 | 0.064 | 100% | 0.169 |
+| c | 0.01 | off | 2e-6 | 62.10 | −2.49 | 292 | 0.085 | 0% | 0.025 |
+| d | 0.05 | off | 2e-6 | 63.04 | −1.55 | 158 | 0.070 | 0% | 0.169 |
+| e | 0.05 | 1.0 | 1e-5 | 16.99 | −47.60 | 96 | 0.073 | 100% | 0.135 |
+
+- Every setting lowers held-out mAP; a higher LR collapses the model. Larger noise (0.05) gives more informative advantages (91% non-zero vs 58%) and hurts less.
+- The consistency term is ~3,000× weaker than the policy gradient, so it does not anchor anything at weight 5.0.
+- One seed and 400 steps only: the effect could be an early transient, but nothing here supports running long RL jobs with these settings.
+- Logs: `results/pilot_s2_sweep_4515798/`.
 
 ## 2026-10-09: Stage B correctness audit
 
