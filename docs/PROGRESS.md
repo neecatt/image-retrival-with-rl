@@ -2,12 +2,12 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
-## Open problems (as of 2026-10-09, 23:30)
+## Open problems (as of 2026-10-10)
 
 | # | Problem | Why it matters | Status |
 |---|---|---|---|
 | P1 | Stage 1 baseline is weak: ROxford5k Medium 28.30 / Hard 12.21 (official scoring, long side 1024), only +4.2 Medium over an untrained ImageNet ResNet50-GeM (24.14). Published fine-tuned GeM systems report far higher numbers, though with multi-scale testing and whitening that we do not use | Any reward-tuning gain on top of a weak baseline is hard to interpret | **Largely fixed (C1).** New Stage 1 (3 seeds): ROxford M/H 42.27/19.41, RParis M/H 59.87/32.94, vs 28.30/12.21 and 43.75/19.80 before. Still below published systems that use multi-scale testing and whitening |
-| P2 | **Stage 2 RL lowers held-out SfM val mAP in every setting tried** (B2), and the historical `stage2_epoch_5.pth` is worse than Stage 1 on every metric (B1) | The central claim (RL improves retrieval) is currently not supported | Open. Strong anchoring stops the damage but gives no clear gain: best +0.39 (one seed, 1,000 steps, B4), within likely noise. Re-test on the new Stage 1 with longer runs and several seeds; reconsider the reward and gallery design |
+| P2 | **Stage 2 RL lowers held-out SfM val mAP in every setting tried** (B2), and the historical `stage2_epoch_5.pth` is worse than Stage 1 on every metric (B1) | The central claim (RL improves retrieval) is currently not supported | **Answered for the current method (C4): no measurable gain.** From the new Stage 1, 3 seeds, matched budget: RL vs continued metric learning differs by −0.45 to +0.24 points, all within seed spread. RL is a valid fine-tuning method that does no harm when anchored, but does not beat the control. Improving it needs a method change (Stage D) |
 | P3 | Checkpoint selection signal is weak: "validation reward" is mAP inside each batch of 8 (gallery of ~4 images), close to 1.0 | Cannot reliably pick the best epoch | Fixed (F5), verified in smoke run 4515494 |
 | P4 | README Stage 1 numbers (16.97 Medium / 3.59 Hard) do not match a rerun of `stage1_epoch_13_best.pth` (18.29 / 9.33 with the old scoring) | Historical results cannot be reproduced as stated | Likely a different checkpoint or older code. The run folders on tinyx have not been copied yet |
 | P5 | Policy gradient norm is 100–300 vs 0.06–0.08 for the consistency term; `gradient_clip: 1.0` clips 90–100% of steps | The consistency regulariser has no practical effect; updates are clipped to unit norm every step | Measured (B2). Addressed together with P2 |
@@ -55,8 +55,29 @@ Question: does reward tuning (RL) beat simply continuing metric learning (ML) fr
 - **Host-memory OOM:** the batch-32 RL job was killed by the host-RAM limit (~86.7 GB of 92 GB) during validation after epoch 2; the batch-8 RL job peaked at the same level. Likely cause: 16 loader workers on each of three loaders. Seed runs use 8 workers. The epoch-1 checkpoint survived.
 - With consistency weight 5,000 the consistency gradient (13–24) is now comparable to the policy gradient (60–120), unlike pilot 1.
 
-### C4. Seed repeats with final evaluation (jobs 4518806–4518811)
-Best setting of each arm from each of the three Stage 1 seeds, benchmarks scored once on the validation-selected epoch. Results pending.
+### C4. Seed repeats with final evaluation (jobs 4518806–4518811, 29–37 min each)
+Best setting of each arm (from C3) started from each of the three Stage 1 seeds, same seed for the fine-tuning run. Benchmarks scored once on the validation-selected epoch (official scoring, longer side 1024).
+
+| Model (3 seeds, mean ± std) | SfM val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|
+| Stage 1 | 83.04 ± 0.01 | 42.27 ± 1.17 | 19.41 ± 0.70 | 59.87 ± 0.95 | 32.94 ± 0.70 |
+| + continued metric learning (control) | 82.95 ± 0.34 | 42.51 ± 1.16 | 20.09 ± 2.46 | **60.25 ± 0.85** | **33.26 ± 0.54** |
+| + reward tuning (RL) | **83.10 ± 0.11** | **42.53 ± 1.39** | **20.34 ± 1.82** | 59.80 ± 0.67 | 33.11 ± 0.66 |
+
+Paired differences (same Stage 1 seed), mean ± std over 3 seeds:
+
+| Comparison | SfM val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|
+| RL − Stage 1 | +0.06 ± 0.11 | +0.27 ± 0.32 | +0.93 ± 1.12 | −0.07 ± 0.28 | +0.17 ± 0.20 |
+| control − Stage 1 | −0.08 ± 0.33 | +0.24 ± 1.71 | +0.69 ± 1.98 | +0.38 ± 0.09 | +0.32 ± 0.32 |
+| **RL − control** | +0.14 ± 0.29 | +0.03 ± 1.70 | +0.24 ± 1.42 | −0.45 ± 0.19 | −0.15 ± 0.15 |
+
+- **No demonstrated gain from reward tuning.** RL and the matched control are indistinguishable on ROxford; the control is slightly better on RParis (−0.45 ± 0.19 Medium for RL, consistent over the 3 seeds but small).
+- RL changes the model more gently: its seed-to-seed spread around Stage 1 is smaller (ROxford M ±0.32 vs ±1.71 for the control).
+- Neither fine-tuning step adds much on top of a well-trained Stage 1 with this budget (one pass over SfM-120k).
+- Compute per run including staging and final evaluation: control ~30 min, RL ~36 min on one RTX PRO 6000.
+- **Host memory:** all six jobs still peaked at ~84.6–86.7 GB of the 92 GB limit even with 8 workers, so the earlier OOM was not only worker count. Likely page cache from the ~40 GB staged dataset counted against the job. Watch this before larger runs.
+- Records: `results/runs/cmp_{ml,rl}_*_seed*/`.
 
 
 ### B3. Stage 1 pilot: batch size and learning rate (job 4515831, 50 min)
