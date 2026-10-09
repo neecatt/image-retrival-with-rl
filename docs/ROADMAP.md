@@ -22,7 +22,8 @@ These are proposed implementation and experiment stages, not completed work. Res
 Status: largely complete as of 2026-10-08; remaining items listed below.
 
 - Done (evidence in `scripts/` and Slurm logs `logs/*-4504546/4504574/4504625/4504653`): checkpoints `stage1_epoch_13_best.pth` and `stage2_epoch_5.pth` copied from tinyx (byte sizes and sha256 match the tinyx originals, verified 2026-10-09); packed archives for SfM-120k, ROxford5k, RParis6k downloaded to `$HPCVAULT/datasets` (size-verified, sha256 in `datasets/logs/`); archive contents checked against the metadata pickles; node-local TMPDIR staging validated for all three datasets; venv `~/venvs/rl-env` (python/3.12-base, pinned `requirements.txt`) created; unmodified `evaluate.py` ran end to end on 1 GPU (pipeline smoke only, not a research result).
-- Open: run folders `stage1_20260405_073610`, `stage2_20260417_231413`, `stage2_20260406_173128` not yet copied; old job scripts (`train_job.sh` etc.) still reference conda `rl-env` and are not usable; train.py not yet smoke-tested; GPU-hour allocation still unknown.
+- Also done 2026-10-09: `train.py` smoke-tested (job 4515494); new resumable job scripts replace the old ones for current work (`scripts/train_stage1_job.sh`, `scripts/pilot_stage2_sweep_job.sh`, `scripts/eval_baselines_job.sh`). User states there is no GPU-hour limit; queue waits are acceptable for heavy training only.
+- Open: run folders `stage1_20260405_073610`, `stage2_20260417_231413`, `stage2_20260406_173128` not yet copied; old job scripts (`train_job.sh` etc.) still reference conda `rl-env` and are unusable.
 
 - Inventory transferred checkpoints, manifests, packed datasets, and environments using lightweight reads. Resolve old absolute paths to run-specific Alex paths.
 - Adapt job scripts for current Slurm syntax, environment setup, node-local staging, persistent outputs, and resume support. Check quota and account limits before substantial data operations.
@@ -30,7 +31,12 @@ Status: largely complete as of 2026-10-08; remaining items listed below.
 
 ### Research stage B — Correctness and reproducible baseline
 
-Status: initial inspection found issues; fixes and experiments have not been performed.
+Status: correctness work largely complete; reproducible baseline in progress (2026-10-09). Details and evidence: [PROGRESS.md](PROGRESS.md).
+
+- Done: estimator audit and fix (sampled action detached; gradient magnitude 0.047× → 0.973× of truth on a tractable problem), single baseline code path, official Revisited AP (matches revisitop exactly), longer-side resize protocol, ROxford-driven selection removed, deterministic SfM-120k val mAP as the selection metric, gradient diagnostics in RL training.
+- Done: corrected reference numbers for the historical checkpoints (job 4515706). Historical Stage 1: SfM val 64.59, ROxford M/H 28.30/12.21, RParis M/H 43.75/19.80; it beats untrained ImageNet R50-GeM by only ~4 ROxford Medium points. Historical Stage 2 (`stage2_epoch_5.pth`) is worse than Stage 1 on every metric; README Stage 2 gains are not reproduced.
+- In progress: new Stage 1 baseline (batch 32 = 8 landmarks per batch, lr 1e-5, chosen on SfM val in pilot 4515831). Full 20-epoch runs from job 4516394.
+- Open finding: in pilots so far, Stage 2 RL does not improve held-out SfM val mAP (−1.6 to −4.0 without anchoring; −0.01 to +0.39 with strong anchoring, one seed).
 
 - Audit normalized-Gaussian sampling versus the current cosine/von-Mises–Fisher-style proxy density, sampled-action detachment for score-function gradients, baseline independence, and stochastic gallery gradient treatment. Validate a consistent estimator on a tractable small problem.
 - Replace or reconcile the current precision-at-positive AP calculation with official Revisited scoring; verify crops, junk/empty-positive handling, and metric definitions.
