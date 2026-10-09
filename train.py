@@ -84,6 +84,9 @@ def parse_args():
                         help='Only run stage 2 (RL fine-tuning)')
     parser.add_argument('--resume', type=str, default=None,
                         help='Path to checkpoint to resume from')
+    parser.add_argument('--init_checkpoint', type=str, default=None,
+                        help='Load model weights only and start a fresh run at epoch 1 '
+                             '(e.g. continued metric learning from a Stage 1 model)')
     parser.add_argument('--seed', type=int, default=None,
                         help='Random seed (overrides config)')
     parser.add_argument('--stage1_epochs', type=int, default=None,
@@ -832,6 +835,9 @@ def main():
         checkpoint = load_checkpoint(args.resume, model, device=device)
         resume_epoch = int(checkpoint.get('epoch', 0) or 0)
         print(f"Resumed from epoch {resume_epoch}")
+    elif args.init_checkpoint is not None:
+        print(f"\nInitialising weights from {args.init_checkpoint} (fresh optimizer, epoch 1)")
+        load_checkpoint(args.init_checkpoint, model, device=device)
     
     # Create dataloaders
     stage1_dataloaders = None

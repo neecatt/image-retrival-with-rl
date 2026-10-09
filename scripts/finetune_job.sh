@@ -1,0 +1,43 @@
+#!/bin/bash -l
+#SBATCH --job-name=finetune
+#SBATCH --partition=rtxpro6k
+#SBATCH --gres=gpu:rtxpro6k:1
+#SBATCH --time=04:00:00
+#SBATCH --output=logs/finetune-%j.out
+#SBATCH --error=logs/finetune-%j.err
+#SBATCH --export=NONE
+# Continue training from a fixed initial checkpoint, for matched comparisons:
+#   ARM=ml  continued metric learning (Stage 1 loss, fresh optimizer)
+#   ARM=rl  reward tuning (Stage 2)
+# Usage: sbatch scripts/finetune_job.sh RUN_NAME ARM INIT_CKPT [key=value overrides...] [--final-eval]
+# Selection on SfM-120k val; with --final-eval, ROxford/RParis are scored once on the selected checkpoint.
+set -euo pipefail
+unset SLURM_EXPORT_ENV
+module load python/3.12-base
+source "$HOME/venvs/rl-env/bin/activate"
+cd "$SLURM_SUBMIT_DIR"
+export PYTHONUNBUFFERED=1 OMP_NUM_THREADS=8
+: "${HPCVAULT:?HPCVAULT must be set}"
+RUN="${1:?RUN_NAME}"; ARM="${2:?ARM ml|rl}"; INIT="${3:?INIT_CKPT}"; shift 3
+FINAL=0; OVR=()
+for x in "$@"; do if [ "$x" = "--final-eval" ]; then FINAL=1; else OVR+=("$x"); fi; done
+case "$ARM" in ml) STAGE=stage1 ;; rl) STAGE=stage2 ;; *) echo "ARM must be ml or rl"; exit 2 ;; esac
+OUT="results/runs/$RUN"; CKPT="$HPCVAULT/runs/$RUN"
+mkdir -p "$OUT" "$CKPT"
+echo "$SLURM_JOB_ID $(date -Is) $(git rev-parse HEAD) arm=$ARM init=$INIT" >> "$OUT/jobs.txt"
+git diff > "$OUT/git_diff_${SLURM_JOB_ID}.patch"
+sha256sum "$INIT" > "$OUT/init_sha256.txt"
+
+DATASETS=(sfm120k); [ "$FINAL" = 1 ] && DATASETS+=(roxford5k rparis6k)
+python scripts/stage_datasets.py "${DATASETS[@]}"
+python scripts/make_run_config.py config/config.yaml "$OUT/run_config.yaml" \
+    dataset.root_dir="$TMPDIR/data/raw" \
+    system.checkpoint_dir="$CKPT" system.log_dir="$OUT/tb" system.results_dir="$OUT" \
+    system.num_workers=16 system.save_frequency=1000 "${OVR[@]}"
+python train.py --config "$OUT/run_config.yaml" --${STAGE}_only --init_checkpoint "$INIT" < /dev/null 2>&1 \
+    | grep -v "it/s\]\|s/it\]"
+
+if [ "$FINAL" = 1 ]; then
+    BEST=$(ls -t "$CKPT"/${STAGE}_*/${STAGE}_best.pth | head -1)
+    python scripts/eval_baselines.py --data_root "$TMPDIR/data/raw" --out "$OUT/final_eval.json" --models "$BEST"
+fi
