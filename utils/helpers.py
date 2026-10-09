@@ -137,14 +137,20 @@ def save_checkpoint(
     # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     
-    # Save checkpoint
-    torch.save(state, filepath)
+    # Write to a temporary file and rename, so an interrupted save never
+    # leaves a truncated checkpoint in place of a good one
+    def _atomic_save(path):
+        tmp = path + '.tmp'
+        torch.save(state, tmp)
+        os.replace(tmp, path)
+
+    _atomic_save(filepath)
     print(f"Checkpoint saved to {filepath}")
-    
+
     # If this is the best model, save a separate copy
     if is_best:
         best_filepath = filepath.replace('.pth', '_best.pth')
-        torch.save(state, best_filepath)
+        _atomic_save(best_filepath)
         print(f"Best model saved to {best_filepath}")
 
 
