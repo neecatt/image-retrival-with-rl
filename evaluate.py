@@ -159,8 +159,9 @@ def evaluate_revisited(model, dataset_name, config, device, args=None):
     dataset_root = root_dir_cfg / dataset_name
 
     eval_size = config['dataset'].get('query_size', 1024)
-    print(f"  Eval resolution: shorter edge = {eval_size}px")
-    transform = get_revisited_benchmark_transforms(image_size=eval_size)
+    eval_resize = config['dataset'].get('eval_resize', 'long')
+    print(f"  Eval resolution: {eval_resize} side = {eval_size}px")
+    transform = get_revisited_benchmark_transforms(image_size=eval_size, resize=eval_resize)
     dataset_handler = RevisitedDataset(root_dir=str(dataset_root), dataset_name=dataset_name)
     gnd = dataset_handler.get_ground_truth()
 
