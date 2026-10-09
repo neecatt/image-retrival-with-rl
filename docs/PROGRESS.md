@@ -6,14 +6,40 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 
 | # | Problem | Why it matters | Status |
 |---|---|---|---|
-| P1 | Stage 1 baseline is weak: ROxford5k Medium 28.30 / Hard 12.21 (official scoring, long side 1024), only +4.2 Medium over an untrained ImageNet ResNet50-GeM (24.14). Published fine-tuned GeM systems report far higher numbers, though with multi-scale testing and whitening that we do not use | Any reward-tuning gain on top of a weak baseline is hard to interpret | Partly explained (protocol, B1). Training suspects: 2 landmarks per batch, Adam lr 1e-4 on the whole backbone. Pilot job 4515831 is testing batch 32 and lower LR |
-| P2 | **Stage 2 RL lowers held-out SfM val mAP in every setting tried** (B2), and the historical `stage2_epoch_5.pth` is worse than Stage 1 on every metric (B1) | The central claim (RL improves retrieval) is currently not supported | Open. Next: much stronger anchoring (consistency weight ~1000× higher, since it is ~3000× weaker than the policy gradient) and lower LR, then longer runs; also check the reward/memory-bank design |
+| P1 | Stage 1 baseline is weak: ROxford5k Medium 28.30 / Hard 12.21 (official scoring, long side 1024), only +4.2 Medium over an untrained ImageNet ResNet50-GeM (24.14). Published fine-tuned GeM systems report far higher numbers, though with multi-scale testing and whitening that we do not use | Any reward-tuning gain on top of a weak baseline is hard to interpret | Partly explained (protocol, B1). Batch 32 (8 landmarks) at lr 1e-5 reaches SfM val **79.28** after ~1 epoch vs 64.59 for the old Stage 1 (B3). Full 20-epoch runs started (job 4516394); benchmarks only after selection |
+| P2 | **Stage 2 RL lowers held-out SfM val mAP in every setting tried** (B2), and the historical `stage2_epoch_5.pth` is worse than Stage 1 on every metric (B1) | The central claim (RL improves retrieval) is currently not supported | Open. Strong anchoring stops the damage but gives no clear gain: best +0.39 (one seed, 1,000 steps, B4), within likely noise. Re-test on the new Stage 1 with longer runs and several seeds; reconsider the reward and gallery design |
 | P3 | Checkpoint selection signal is weak: "validation reward" is mAP inside each batch of 8 (gallery of ~4 images), close to 1.0 | Cannot reliably pick the best epoch | Fixed (F5), verified in smoke run 4515494 |
 | P4 | README Stage 1 numbers (16.97 Medium / 3.59 Hard) do not match a rerun of `stage1_epoch_13_best.pth` (18.29 / 9.33 with the old scoring) | Historical results cannot be reproduced as stated | Likely a different checkpoint or older code. The run folders on tinyx have not been copied yet |
 | P5 | Policy gradient norm is 100–300 vs 0.06–0.08 for the consistency term; `gradient_clip: 1.0` clips 90–100% of steps | The consistency regulariser has no practical effect; updates are clipped to unit norm every step | Measured (B2). Addressed together with P2 |
 | P6 | Gallery embeddings are sampled but receive no policy gradient; memory-bank entries come from older parameters | The objective is "query-only, given a noisy gallery", not full expected AP | Acceptable if stated explicitly in the paper; not changed |
 
 ## 2026-10-09: Reference numbers and first pilots
+
+### B3. Stage 1 pilot: batch size and learning rate (job 4515831, 50 min)
+From ImageNet, batch 32 = 8 landmarks × 4 images (old runs: 8 = 2 × 4), 1024² crops, FastAP, 3 short epochs of 1,000 batches (~96k images, about one pass over SfM-120k). SfM-120k val mAP after each epoch; no benchmark evaluated.
+
+| LR | epoch 1 | epoch 2 | epoch 3 |
+|---|---|---|---|
+| 1e-4 | 71.02 | 73.82 | 78.80 |
+| **1e-5** | **76.40** | **78.31** | **79.28** |
+| 1e-6 | 66.25 | 70.44 | 71.34 |
+
+- All three beat the old Stage 1 (64.59) on held-out validation within one pass over the data, so the 2-landmark batch is a likely main cause of P1. LR was not the main factor (1e-4 also reaches 78.8).
+- Chosen on validation: batch 32, lr 1e-5. Full runs: `scripts/train_stage1_job.sh`, 20 epochs, checkpoints in `$HPCVAULT/runs/<run>`.
+- Pilot checkpoints (9.9 GB) are in `$HPCVAULT/runs/pilot_s1_4515831/`; they are disposable once the full runs finish.
+
+### B4. Stage 2 pilot 2: anchoring (job 4515890, 19 min; one seed, 1,000 batches, sample_std 0.05, no clipping)
+Starting point: Stage 1 SfM val mAP 64.59.
+
+| Run | consistency weight | LR | SfM val mAP | Δ | consistency grad norm | policy grad norm |
+|---|---|---|---|---|---|---|
+| f | 5 | 5e-7 | 64.76 | +0.17 | 0.04 | 147 |
+| g | 5,000 | 2e-6 | 64.98 | +0.39 | 20.0 | 149 |
+| h | 50,000 | 2e-6 | 64.58 | −0.01 | 72.9 | 145 |
+| i | 50,000 | 5e-7 | 64.60 | +0.01 | 33.4 | 147 |
+
+- Anchoring (or a low LR) prevents the drop seen in B2, but no setting gives a gain that stands out from single-seed noise.
+- Spec: `scripts/sweeps/stage2_pilot2.txt`; logs: `results/pilot_s2_sweep_4515890/`.
 
 ### B1. Reference evaluation under the corrected protocol (job 4515706, 13 min)
 Official Revisited scoring, single scale. SfM-120k val = leave-one-out mAP over 6,403 images (selection metric). `short`/`long` = shorter/longer image side resized to 1024.
