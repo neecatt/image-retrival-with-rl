@@ -51,6 +51,26 @@ from data.dataloader import BalancedBatchSampler
 from utils.helpers import set_seed, get_device, save_checkpoint, load_checkpoint, save_training_curves
 from utils.logger import Logger
 from evaluate import evaluate_revisited
+from evaluation.sfm_val import evaluate_sfm_val
+from data.dataset_sfm120k import SfM120kDataset
+
+
+def selection_score(model, dataloaders, config, device, fallback: float, logger, tag: str, epoch: int):
+    """Checkpoint-selection score (higher is better).
+
+    Default: leave-one-out mAP over the full SfM-120k validation split (held out,
+    deterministic). Set training.selection_metric to 'legacy' to fall back to the
+    batch-level validation loss/reward, passed in as `fallback`.
+    """
+    val_loader = dataloaders.get('val')
+    use_map = config['training'].get('selection_metric', 'sfm_val_map') == 'sfm_val_map'
+    if use_map and val_loader is not None and isinstance(val_loader.dataset, SfM120kDataset):
+        m = evaluate_sfm_val(model, val_loader.dataset, device,
+                             num_workers=config['system']['num_workers'])
+        logger.log_scalar(f'{tag}/sfm_val_mAP', m['sfm_val_mAP'], epoch)
+        logger.log_scalar(f'{tag}/sfm_val_success@1', m['sfm_val_success@1'], epoch)
+        return m['sfm_val_mAP'], m
+    return fallback, {}
 
 
 def parse_args():
@@ -358,6 +378,11 @@ def create_dataloaders(config, stage='stage1'):
             batch_size=batch_size,
             images_per_class=images_per_class,
         )
+        # Optional cap for pilots/smoke runs; unset for real training
+        max_batches = config['training'][stage].get('max_batches_per_epoch')
+        if max_batches:
+            sampler.num_batches = min(sampler.num_batches, int(max_batches))
+            print(f"  max_batches_per_epoch={max_batches}: {sampler.num_batches} train batches/epoch")
         train_loader = torch.utils.data.DataLoader(
             train_ds,
             batch_sampler=sampler,
@@ -476,7 +501,8 @@ def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 
     
     # Training loop
     best_loss = float('inf')
-    history = {'train_loss': [], 'val_loss': []}
+    best_score = float('-inf')
+    history = {'train_loss': [], 'val_loss': [], 'sfm_val_mAP': []}
     
     for epoch in range(start_epoch, total_epochs + 1):
         # Train
@@ -502,10 +528,14 @@ def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 
         if scheduler is not None:
             scheduler.step()
         
-        # Save checkpoint
-        is_best = val_metrics['loss'] < best_loss
+        # Save checkpoint (selection on held-out SfM-120k validation)
+        best_loss = min(best_loss, val_metrics['loss'])
+        score, sel = selection_score(model, dataloaders, config, device,
+                                     -val_metrics['loss'], logger, 'stage1', epoch)
+        history['sfm_val_mAP'].append(sel.get('sfm_val_mAP', float('nan')))
+        is_best = score > best_score
         if is_best:
-            best_loss = val_metrics['loss']
+            best_score = score
         
         if epoch % config['system']['save_frequency'] == 0 or is_best:
             checkpoint_path = os.path.join(
@@ -517,6 +547,9 @@ def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'best_loss': best_loss,
+                'selection_score': score,
+                'best_selection_score': best_score,
+                'val_metrics': sel,
                 'config': config
             }, checkpoint_path, is_best=is_best)
     
@@ -610,6 +643,7 @@ def train_stage2(model, dataloaders, config, device, logger):
 
     # Training loop
     best_reward = 0.0
+    best_score = float('-inf')
     best_roxford_map = 0.0
     history = {
         'train_reward': [], 'val_reward': [], 'train_loss': [], 'baseline': [],
@@ -669,9 +703,13 @@ def train_stage2(model, dataloaders, config, device, logger):
                 }, best_bench_path, is_best=False)
                 print(f"  New best ROxford5k mAP (Medium): {best_roxford_map:.4f}")
 
-        is_best = val_metrics['reward'] > best_reward
+        best_reward = max(best_reward, val_metrics['reward'])
+        score, sel = selection_score(model, dataloaders, config, device,
+                                     val_metrics['reward'], logger, 'stage2', epoch)
+        history.setdefault('sfm_val_mAP', []).append(sel.get('sfm_val_mAP', float('nan')))
+        is_best = score > best_score
         if is_best:
-            best_reward = val_metrics['reward']
+            best_score = score
 
         if epoch % config['system']['save_frequency'] == 0 or is_best:
             checkpoint_path = os.path.join(
@@ -683,6 +721,9 @@ def train_stage2(model, dataloaders, config, device, logger):
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'best_reward': best_reward,
+                'selection_score': score,
+                'best_selection_score': best_score,
+                'val_metrics': sel,
                 'config': config
             }, checkpoint_path, is_best=is_best)
 

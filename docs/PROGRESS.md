@@ -6,14 +6,36 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 
 | # | Problem | Why it matters | Status |
 |---|---|---|---|
-| P1 | Stage 1 baseline is far below published numbers: ROxford5k Medium 17.72 / Hard 8.60 mAP (official scoring) vs roughly 60+ Medium reported for GeM-ResNet50 trained on SfM-120k | Any reward-tuning gain on top of a weak baseline is hard to interpret, and reviewers will compare against published baselines | Not diagnosed. Suspects: FastAP with batch size 8, 1024² centre-crop training, no whitening. Unverified |
+| P1 | Stage 1 baseline is far below published numbers: ROxford5k Medium 17.72 / Hard 8.60 mAP (official scoring) vs roughly 60+ Medium reported for GeM-ResNet50 trained on SfM-120k | Any reward-tuning gain on top of a weak baseline is hard to interpret, and reviewers will compare against published baselines | Not diagnosed. Suspects: batch size 8 with PK sampling = only **2 landmarks per batch** (few negatives for FastAP), 1024² centre-crop training, no whitening. Unverified |
 | P2 | Stage 2 hyperparameters were tuned against a gradient ~20× too small (see F1) | `consistency_weight: 5.0` and `lr: 2e-6` are probably badly balanced now | Must be re-tuned on validation, not on ROxford |
-| P3 | Checkpoint selection signal is weak: "validation reward" is mAP inside each batch of 8 (gallery of ~4 images), close to 1.0 | Cannot reliably pick the best epoch | Next: full retrieval mAP over all 6,403 SfM-120k val images |
+| P3 | Checkpoint selection signal is weak: "validation reward" is mAP inside each batch of 8 (gallery of ~4 images), close to 1.0 | Cannot reliably pick the best epoch | Fixed (F5), verified in smoke run 4515494 |
 | P4 | README Stage 1 numbers (16.97 Medium / 3.59 Hard) do not match a rerun of `stage1_epoch_13_best.pth` (18.29 / 9.33 with the old scoring) | Historical results cannot be reproduced as stated | Likely a different checkpoint or older code. The run folders on tinyx have not been copied yet |
-| P5 | `train.py` has not run on Alex since the fixes below | Fixes are verified on CPU only | Next: short Stage 2 smoke run |
+| P5 | RL advantage is tiny: reward and baseline differ by <0.01 on average with `sample_std` 0.01, and the policy loss reaches ±135 so `gradient_clip: 1.0` probably clips every step | The update may be mostly clipped noise, and the consistency term is now negligible | Needs gradient-norm logging and a validation sweep of `sample_std`, clip and consistency weight |
 | P6 | Gallery embeddings are sampled but receive no policy gradient; memory-bank entries come from older parameters | The objective is "query-only, given a noisy gallery", not full expected AP | Acceptable if stated explicitly in the paper; not changed |
 
 ## 2026-10-09: Stage B correctness audit
+
+### Smoke run of train.py (job 4515494, 5 min 43 s, rtxpro6k)
+Stage 2 from `stage1_epoch_13_best.pth`, 50 batches, then full SfM validation. Not a research result.
+- Everything ran: staging, compiled model + `--resume` (F6), unified RL step (F1, F2), SfM val selection (F5), checkpoint saving.
+- SfM-120k val after 50 RL steps: **mAP 64.59**, success@1 93.28 (6,403 queries). The Stage 1 value has not been measured yet, so this is not a gain.
+- Observation: SfM val mAP is ~65 while ROxford Medium is ~18, so the model fits SfM-like data but transfers poorly (relevant to P1).
+- Train reward falls from ~1.0 to 0.83 during the epoch because the memory bank fills to 4,096 items and the task gets harder, not because the model degrades.
+- Speed: ~7.5 it/s at batch 8, 1024² after ~50 s of compile warm-up; 19 GB GPU memory.
+- Outputs: `results/smoke_train_4515494/` (run config, git revision and diff, metrics). Checkpoints stayed in TMPDIR on purpose.
+
+### F5. Checkpoint selection now uses full SfM-120k validation mAP (fixed)
+- **Problem:** "validation" was mAP or FastAP loss inside random PK batches of 8. The batches are redrawn every epoch without a fixed seed, so the score is noisy from epoch to epoch, and with a gallery of ~4 images the RL reward sits near 1.0.
+- **Fix:** `evaluation/sfm_val.py` queries each of the 6,403 val images against all others (self excluded, positives = same 3D-model cluster) with the official trapezoidal AP. Stage 1 and Stage 2 both select on it by default (`training.selection_metric: legacy` restores the old behaviour). Checkpoints store the score.
+- **Evidence:** on random data the vectorised mAP matches the per-query official formula to ~1e-8, and queries without positives are excluded.
+
+### F6. Resuming into a compiled model (fixed, verified in job 4515494)
+- **Problem:** `train.py` calls `torch.compile` before `--resume`, and the compiled model expects `_orig_mod.`-prefixed keys. The Stage 1 checkpoint has plain keys, so a strict load would fail.
+- **Fix:** `utils.helpers.load_checkpoint` strips the prefix and loads into the underlying module.
+
+### Tooling added
+- `training.<stage>.max_batches_per_epoch` caps batches per epoch for pilots; leave it unset for real runs.
+- `scripts/make_run_config.py` writes a run-specific config with dotted overrides. The canonical configs still contain tinyx output paths, so always override `system.*_dir` and `dataset.root_dir`.
 
 ### F1. RL estimator gradient was ~20× too small (fixed)
 - **Problem:** in `RLTrainer._sample_on_sphere` the sampled action was not detached inside the log-probability `cos(sample, mean) / σ²`. The score-function (REINFORCE) estimator requires the action to be held fixed, so an extra reparameterisation term entered the gradient.
