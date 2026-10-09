@@ -626,7 +626,9 @@ def train_stage2(model, dataloaders, config, device, logger):
         sample_std=stage2_config.get('sample_std', 0.05),
         consistency_weight=stage2_config.get('consistency_weight', 0.0),
         memory_bank_size=stage2_config.get('memory_bank_size', 0),
-        use_amp=config['training']['stage2'].get('use_amp', False)
+        use_amp=config['training']['stage2'].get('use_amp', False),
+        policy_weight=stage2_config.get('policy_weight', 1.0),
+        diagnostics_every=stage2_config.get('diagnostics_every', 0)
     )
     
     # Per-epoch ROxford5k monitoring is diagnostic only and off by default:

@@ -134,7 +134,9 @@ class RLTrainer:
         sample_std: float = 0.05,
         consistency_weight: float = 0.0,
         memory_bank_size: int = 0,
-        use_amp: bool = False
+        use_amp: bool = False,
+        policy_weight: float = 1.0,
+        diagnostics_every: int = 0
     ):
         self.model = model
         self.reward_fn = reward_fn
@@ -147,6 +149,11 @@ class RLTrainer:
         self.consistency_weight = float(consistency_weight)
         self.memory_bank = EmbeddingMemoryBank(capacity=memory_bank_size) if memory_bank_size > 0 else None
         self.use_amp = use_amp
+        # policy_weight=0 gives the consistency-only control; diagnostics_every=N
+        # measures policy vs consistency gradient norms separately every N steps
+        # (two extra backward passes, so keep N large in real runs).
+        self.policy_weight = float(policy_weight)
+        self.diagnostics_every = int(diagnostics_every)
 
         if self.use_amp:
             self.scaler = torch.amp.GradScaler("cuda")
@@ -217,6 +224,7 @@ class RLTrainer:
         reward_meter = AverageMeter()
         loss_meter = AverageMeter()
         baseline_meter = AverageMeter()
+        diag_meters = {}
 
         start_time = time.time()
         pbar = tqdm(train_loader, desc=f"Epoch {epoch} (RL Training)")
@@ -241,6 +249,9 @@ class RLTrainer:
             loss_meter.update(loss.item(), query_images.size(0))
             reward_meter.update(metrics['reward'], query_images.size(0))
             baseline_meter.update(metrics['baseline'], query_images.size(0))
+            for k, v in metrics.items():
+                if k.startswith('diag/'):
+                    diag_meters.setdefault(k, AverageMeter()).update(v)
 
             pbar.set_postfix({
                 'loss': f"{loss_meter.avg:.4f}",
@@ -256,6 +267,9 @@ class RLTrainer:
                 self.logger.log_scalar('train/reward', metrics['reward'], self.global_step)
                 self.logger.log_scalar('train/baseline', metrics['baseline'], self.global_step)
                 self.logger.log_scalar('train/advantage', metrics['advantage'], self.global_step)
+                for k, v in metrics.items():
+                    if k.startswith('diag/'):
+                        self.logger.log_scalar(f'train/{k[5:]}', v, self.global_step)
 
             self.global_step += 1
 
@@ -263,12 +277,16 @@ class RLTrainer:
         print(f"Epoch {epoch} completed in {format_time(elapsed_time)}")
         print(f"  Average Reward: {reward_meter.avg:.4f}")
         print(f"  Average Loss: {loss_meter.avg:.4f}")
+        diag = {k[5:]: m.avg for k, m in diag_meters.items()}
+        if diag:
+            print("  Diagnostics (epoch means): " + ", ".join(f"{k}={v:.4g}" for k, v in sorted(diag.items())))
 
         return {
             'reward': reward_meter.avg,
             'loss': loss_meter.avg,
             'baseline': baseline_meter.avg,
-            'time': elapsed_time
+            'time': elapsed_time,
+            **diag,
         }
 
     def train_step(
@@ -342,19 +360,33 @@ class RLTrainer:
                 F.mse_loss(gallery_means, ref_gallery.float())
             )
 
-        total_loss = policy_loss + self.consistency_weight * consistency_loss
+        weighted_policy = self.policy_weight * policy_loss
+        weighted_consistency = self.consistency_weight * consistency_loss
+        total_loss = weighted_policy + weighted_consistency
+
+        diag = {}
+        if self.diagnostics_every and self.global_step % self.diagnostics_every == 0:
+            params = [p for p in self.model.parameters() if p.requires_grad]
+            for name, term in (('policy', weighted_policy), ('consistency', weighted_consistency)):
+                if term.requires_grad:
+                    grads = torch.autograd.grad(term, params, retain_graph=True, allow_unused=True)
+                    diag[f'diag/grad_norm_{name}'] = torch.norm(torch.stack(
+                        [g.norm() for g in grads if g is not None])).item()
+                else:
+                    diag[f'diag/grad_norm_{name}'] = 0.0
 
         if self.use_amp:
             self.scaler.scale(total_loss).backward()
-            if self.gradient_clip > 0:
-                self.scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip)
+            self.scaler.unscale_(self.optimizer)
+        else:
+            total_loss.backward()
+        # Pre-clip norm is always measured; clipping only if configured
+        max_norm = self.gradient_clip if self.gradient_clip > 0 else float('inf')
+        grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm).item()
+        if self.use_amp:
             self.scaler.step(self.optimizer)
             self.scaler.update()
         else:
-            total_loss.backward()
-            if self.gradient_clip > 0:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip)
             self.optimizer.step()
 
         if self.memory_bank is not None:
@@ -366,6 +398,13 @@ class RLTrainer:
             'reward': reward_mean,
             'baseline': baseline_mean,
             'advantage': (reward_mean - baseline_mean),
+            'diag/grad_norm_total': grad_norm,
+            'diag/clipped': float(self.gradient_clip > 0 and grad_norm > self.gradient_clip),
+            'diag/policy_loss': policy_loss.item(),
+            'diag/consistency_loss': consistency_loss.item(),
+            'diag/adv_abs_mean': per_query_advantage.abs().mean().item(),
+            'diag/adv_nonzero_frac': (per_query_advantage.abs() > 1e-6).float().mean().item(),
+            **diag,
         }
         return total_loss, metrics
 
