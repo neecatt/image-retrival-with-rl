@@ -149,7 +149,7 @@ class RLTrainer:
         self.use_amp = use_amp
 
         if self.use_amp:
-            self.scaler = torch.cuda.amp.GradScaler()
+            self.scaler = torch.amp.GradScaler("cuda")
 
         self.global_step = 0
 
@@ -173,12 +173,17 @@ class RLTrainer:
         This is proportional to the log-density of a von Mises–Fisher
         distribution centered at the mean, which is the correct distribution
         family for points on a unit sphere.
+
+        The sampled action is detached inside the log-prob: the score-function
+        estimator differentiates log π(a|θ) with the action a held fixed.
+        Leaving it attached adds a reparameterisation term that shrank the
+        gradient ~20x at d=512, σ=0.01 (see scripts/audit_estimator.py).
         """
         noise = self.sample_std * torch.randn_like(mean_embeddings)
         raw = mean_embeddings + noise
         sampled = F.normalize(raw, p=2, dim=1)
 
-        cos_sim = (sampled * mean_embeddings).sum(dim=1)
+        cos_sim = (sampled.detach() * mean_embeddings).sum(dim=1)
         log_prob = cos_sim / (self.sample_std ** 2)
         return sampled, log_prob
 
@@ -284,118 +289,72 @@ class RLTrainer:
         """
         self.optimizer.zero_grad()
 
-        if self.use_amp:
-            with torch.cuda.amp.autocast():
-                query_means = self.model(query_images)
-                gallery_means = self.model(gallery_images)
-
-                # --- Sample #1: reward sample ---
-                s_query, q_log_prob = self._sample_on_sphere(query_means)
-                s_gallery, _ = self._sample_on_sphere(gallery_means)
-
-                full_gallery, full_gallery_labels = self._build_gallery(s_gallery, gallery_labels)
-
-                per_query_reward = self.reward_fn.compute_per_example_reward(
-                    s_query, full_gallery, query_labels, full_gallery_labels
-                )
-
-                # --- Baseline ---
-                if self.reward_fn.baseline_type == 'moving_average':
-                    with torch.no_grad():
-                        baseline = self.reward_fn.get_baseline()
-                        per_query_baseline = baseline.expand_as(per_query_reward)
-                else:
-                    with torch.no_grad():
-                        b_query, _ = self._sample_on_sphere(query_means)
-                        b_gallery, _ = self._sample_on_sphere(gallery_means)
-                        b_full_gallery, b_full_labels = self._build_gallery(b_gallery, gallery_labels)
-                        per_query_baseline = self.reward_fn.compute_per_example_reward(
-                            b_query, b_full_gallery, query_labels, b_full_labels
-                        )
-
-                per_query_advantage = per_query_reward - per_query_baseline
-                if self.reward_fn.baseline_type == 'moving_average':
-                    self.reward_fn.update_baseline(per_query_reward.mean())
-
-                # Policy loss: per-example REINFORCE
-                policy_loss = -(per_query_advantage.detach() * q_log_prob).mean()
-
-                # Consistency regulariser (anchors to Stage 1 model)
-                consistency_loss = torch.tensor(0.0, device=self.device)
-                if self.reference_model is not None and self.consistency_weight > 0:
-                    with torch.no_grad():
-                        ref_query = self.reference_model(query_images)
-                        ref_gallery = self.reference_model(gallery_images)
-                    consistency_loss = 0.5 * (
-                        F.mse_loss(query_means, ref_query) +
-                        F.mse_loss(gallery_means, ref_gallery)
-                    )
-
-                total_loss = policy_loss + self.consistency_weight * consistency_loss
-            
-            # Backward pass with scaler
-            self.scaler.scale(total_loss).backward()
-
-            # Gradient clipping
-            if self.gradient_clip > 0:
-                self.scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.gradient_clip
-                )
-
-            # Update parameters
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
-        else:
+        with torch.autocast(device_type=self.device.type, enabled=self.use_amp):
             query_means = self.model(query_images)
             gallery_means = self.model(gallery_images)
 
-            # --- Sample #1: reward sample ---
-            s_query, q_log_prob = self._sample_on_sphere(query_means)
-            s_gallery, _ = self._sample_on_sphere(gallery_means)
+        # Sampling, ranking and log-probs in fp32: σ is tiny and κ = 1/σ² is large.
+        query_means = query_means.float()
+        gallery_means = gallery_means.float()
 
-            full_gallery, full_gallery_labels = self._build_gallery(s_gallery, gallery_labels)
+        # --- Sample #1: reward sample ---
+        s_query, q_log_prob = self._sample_on_sphere(query_means)
+        s_gallery, _ = self._sample_on_sphere(gallery_means)
 
-            per_query_reward = self.reward_fn.compute_per_example_reward(
-                s_query, full_gallery, query_labels, full_gallery_labels
-            )
+        full_gallery, full_gallery_labels = self._build_gallery(s_gallery, gallery_labels)
 
-            # --- Sample #2: baseline sample (independent, no grad) ---
-            with torch.no_grad():
+        per_query_reward = self.reward_fn.compute_per_example_reward(
+            s_query, full_gallery, query_labels, full_gallery_labels
+        )
+
+        # --- Baseline (no grad): configured type is honoured in AMP and fp32 alike ---
+        with torch.no_grad():
+            if self.reward_fn.baseline_type == 'moving_average':
+                per_query_baseline = self.reward_fn.get_baseline().expand_as(per_query_reward)
+            elif self.reward_fn.baseline_type == 'none':
+                per_query_baseline = torch.zeros_like(per_query_reward)
+            elif self.reward_fn.baseline_type == 'sample':
+                # Independent second sample (paper's Algorithm 2 style)
                 b_query, _ = self._sample_on_sphere(query_means)
                 b_gallery, _ = self._sample_on_sphere(gallery_means)
                 b_full_gallery, b_full_labels = self._build_gallery(b_gallery, gallery_labels)
                 per_query_baseline = self.reward_fn.compute_per_example_reward(
                     b_query, b_full_gallery, query_labels, b_full_labels
                 )
+            else:
+                raise ValueError(f"Unknown baseline type: {self.reward_fn.baseline_type}")
 
-            per_query_advantage = per_query_reward - per_query_baseline
+        per_query_advantage = per_query_reward - per_query_baseline
+        if self.reward_fn.baseline_type == 'moving_average':
+            self.reward_fn.update_baseline(per_query_reward.mean())
 
-            # Policy loss: per-example REINFORCE
-            policy_loss = -(per_query_advantage.detach() * q_log_prob).mean()
+        # Policy loss: per-example REINFORCE
+        policy_loss = -(per_query_advantage.detach() * q_log_prob).mean()
 
-            # Consistency regulariser (anchors to Stage 1 model)
-            consistency_loss = torch.tensor(0.0, device=self.device)
-            if self.reference_model is not None and self.consistency_weight > 0:
-                with torch.no_grad():
-                    ref_query = self.reference_model(query_images)
-                    ref_gallery = self.reference_model(gallery_images)
-                consistency_loss = 0.5 * (
-                    F.mse_loss(query_means, ref_query) +
-                    F.mse_loss(gallery_means, ref_gallery)
-                )
+        # Consistency regulariser (anchors to Stage 1 model)
+        consistency_loss = torch.tensor(0.0, device=self.device)
+        if self.reference_model is not None and self.consistency_weight > 0:
+            with torch.no_grad(), torch.autocast(device_type=self.device.type, enabled=self.use_amp):
+                ref_query = self.reference_model(query_images)
+                ref_gallery = self.reference_model(gallery_images)
+            consistency_loss = 0.5 * (
+                F.mse_loss(query_means, ref_query.float()) +
+                F.mse_loss(gallery_means, ref_gallery.float())
+            )
 
-            total_loss = policy_loss + self.consistency_weight * consistency_loss
+        total_loss = policy_loss + self.consistency_weight * consistency_loss
 
-            total_loss.backward()
-
+        if self.use_amp:
+            self.scaler.scale(total_loss).backward()
             if self.gradient_clip > 0:
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.gradient_clip
-                )
-
+                self.scaler.unscale_(self.optimizer)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip)
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+        else:
+            total_loss.backward()
+            if self.gradient_clip > 0:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip)
             self.optimizer.step()
 
         if self.memory_bank is not None:

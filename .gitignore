@@ -106,3 +106,6 @@ results/*
 *.orig
 .DS_Store
 Thumbs.db
+
+# Symlink to packed dataset archives on HPCVAULT
+data/archives

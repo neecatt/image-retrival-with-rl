@@ -1,0 +1,4 @@
+interface:
+  display_name: "Retrieval Experiments"
+  short_description: "Design and audit fair retrieval experiments"
+  default_prompt: "Use $retrieval-experiment to prepare a fair backbone and RL comparison for this project."

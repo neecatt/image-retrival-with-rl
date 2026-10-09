@@ -193,19 +193,25 @@ def evaluate_revisited(model, dataset_name, config, device, args=None):
     k_values = [1, 5, 10]
 
     def compute_ap_with_junk(ranked, pos_set, junk_set):
-        num_relevant = 0
-        rank = 0
+        # Official revisitop compute_ap: junk removed from the ranking, then
+        # trapezoidal integration of precision over recall steps of 1/|pos|.
+        # Checked against hand cases in scripts/audit_eval_vs_official.py.
+        if not pos_set:
+            return 0.0
+        recall_step = 1.0 / len(pos_set)
         ap = 0.0
+        j = 0  # positives found so far
+        rank = 0  # 0-indexed position in the junk-free ranking
         for idx in ranked:
             if idx in junk_set:
                 continue
-            rank += 1
             if idx in pos_set:
-                num_relevant += 1
-                ap += num_relevant / rank
-        if num_relevant == 0:
-            return 0.0
-        return ap / len(pos_set)
+                precision_0 = 1.0 if rank == 0 else j / rank
+                precision_1 = (j + 1) / (rank + 1)
+                ap += (precision_0 + precision_1) * recall_step / 2.0
+                j += 1
+            rank += 1
+        return ap
 
     ap_medium, ap_hard = [], []
     recall_medium = {k: [] for k in k_values}

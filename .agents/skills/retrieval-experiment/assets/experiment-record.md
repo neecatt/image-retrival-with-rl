@@ -1,0 +1,22 @@
+# Experiment record
+
+- Run ID / hypothesis:
+- Status (planned, running, completed, failed):
+- Code revision / dirty patch artifact:
+- Config path / checksum:
+- Dataset version / manifest checksum / subset rule:
+- Train / validation / test split and overlap checks:
+- Backbone / pretrained weights / pretraining data:
+- Aggregation / descriptor dimension / resolution / preprocessing:
+- Trainable layers / initialization checkpoint:
+- Objective / action distribution / reward / baseline:
+- Regularization / memory bank / mining:
+- Seed / optimizer / scheduler / effective batch / steps:
+- Control / compute matching rule:
+- Validation checkpoint selection rule:
+- Official evaluator version / postprocessing / metric definitions:
+- Slurm job ID / GPU model / count / CPUs / memory:
+- Staging time / training time / GPU-hours / peak GPU memory:
+- Checkpoint / metric / log / embedding paths:
+- Results / seed variability / failure diagnostics:
+- Conclusion / limitations / next experiment:

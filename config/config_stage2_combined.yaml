@@ -37,7 +37,7 @@ training:
     algorithm: "reinforce"
     reward_metric: "combined"
     reward_k: [1, 5, 10]
-    baseline: "moving_average"
+    baseline: "sample"  # independent second sample; historical runs used this in practice (fp32 path ignored "moving_average")
     baseline_momentum: 0.95
     sample_std: 0.01
     consistency_weight: 8.0

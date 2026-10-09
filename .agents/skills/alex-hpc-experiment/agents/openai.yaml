@@ -1,0 +1,4 @@
+interface:
+  display_name: "Alex HPC Experiments"
+  short_description: "Stage, run, and diagnose Alex Slurm experiments"
+  default_prompt: "Use $alex-hpc-experiment to prepare a bounded pilot with safe dataset staging."
