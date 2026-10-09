@@ -408,7 +408,7 @@ def create_dataloaders(config, stage='stage1'):
     )
 
 
-def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 1):
+def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 1, resume_state=None):
     """
     Stage 1: Standard metric learning training.
     
@@ -474,7 +474,18 @@ def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 
         )
     else:
         scheduler = None
-    
+
+    # Resuming a Stage 1 run: restore optimizer state, fast-forward the
+    # epoch-level scheduler and keep the best validation score so far
+    if resume_state is not None and start_epoch > 1:
+        if 'optimizer_state_dict' in resume_state:
+            optimizer.load_state_dict(resume_state['optimizer_state_dict'])
+        if scheduler is not None:
+            for _ in range(start_epoch - 1):
+                scheduler.step()
+        print(f"  Resumed optimizer/scheduler at epoch {start_epoch}, "
+              f"best selection score {resume_state.get('best_selection_score')}")
+
     # Create trainer
     trainer = StandardTrainer(
         model=model,
@@ -502,6 +513,8 @@ def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 
     # Training loop
     best_loss = float('inf')
     best_score = float('-inf')
+    if resume_state is not None and start_epoch > 1 and resume_state.get('best_selection_score') is not None:
+        best_score = float(resume_state['best_selection_score'])
     history = {'train_loss': [], 'val_loss': [], 'sfm_val_mAP': []}
     
     for epoch in range(start_epoch, total_epochs + 1):
@@ -537,21 +550,24 @@ def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 
         if is_best:
             best_score = score
         
-        if epoch % config['system']['save_frequency'] == 0 or is_best:
-            checkpoint_path = os.path.join(
-                config['system']['stage1_checkpoint_dir'],
-                f'stage1_epoch_{epoch}.pth'
-            )
-            save_checkpoint({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'best_loss': best_loss,
-                'selection_score': score,
-                'best_selection_score': best_score,
-                'val_metrics': sel,
-                'config': config
-            }, checkpoint_path, is_best=is_best)
+        # Rolling last (for resume) and best (selected on validation), plus
+        # periodic snapshots every save_frequency epochs
+        ckpt_dir = config['system']['stage1_checkpoint_dir']
+        state = {
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'best_loss': best_loss,
+            'selection_score': score,
+            'best_selection_score': best_score,
+            'val_metrics': sel,
+            'config': config
+        }
+        save_checkpoint(state, os.path.join(ckpt_dir, 'stage1_last.pth'))
+        if is_best:
+            save_checkpoint(state, os.path.join(ckpt_dir, 'stage1_best.pth'))
+        if epoch % config['system']['save_frequency'] == 0:
+            save_checkpoint(state, os.path.join(ckpt_dir, f'stage1_epoch_{epoch}.pth'))
     
     save_training_curves(history, config['system']['stage1_results_dir'], 'stage1')
     print(f"\nStage 1 completed! Best loss: {best_loss:.4f}")
@@ -713,21 +729,24 @@ def train_stage2(model, dataloaders, config, device, logger):
         if is_best:
             best_score = score
 
-        if epoch % config['system']['save_frequency'] == 0 or is_best:
-            checkpoint_path = os.path.join(
-                config['system']['stage2_checkpoint_dir'],
-                f'stage2_epoch_{epoch}.pth'
-            )
-            save_checkpoint({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'best_reward': best_reward,
-                'selection_score': score,
-                'best_selection_score': best_score,
-                'val_metrics': sel,
-                'config': config
-            }, checkpoint_path, is_best=is_best)
+        # Rolling last (for resume) and best (selected on validation), plus
+        # periodic snapshots every save_frequency epochs
+        ckpt_dir = config['system']['stage2_checkpoint_dir']
+        state = {
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'best_reward': best_reward,
+            'selection_score': score,
+            'best_selection_score': best_score,
+            'val_metrics': sel,
+            'config': config
+        }
+        save_checkpoint(state, os.path.join(ckpt_dir, 'stage2_last.pth'))
+        if is_best:
+            save_checkpoint(state, os.path.join(ckpt_dir, 'stage2_best.pth'))
+        if epoch % config['system']['save_frequency'] == 0:
+            save_checkpoint(state, os.path.join(ckpt_dir, f'stage2_epoch_{epoch}.pth'))
 
     save_training_curves(history, config['system']['stage2_results_dir'], 'stage2')
     print(f"\nStage 2 completed! Best SfM reward: {best_reward:.4f}")
@@ -831,7 +850,8 @@ def main():
     if not args.stage2_only:
         # Stage 1: Metric learning
         start_epoch = resume_epoch + 1 if args.resume is not None else 1
-        model = train_stage1(model, stage1_dataloaders, config, device, logger, start_epoch=start_epoch)
+        model = train_stage1(model, stage1_dataloaders, config, device, logger, start_epoch=start_epoch,
+                             resume_state=checkpoint if args.resume is not None else None)
     
     if not args.stage1_only:
         # Stage 2: RL fine-tuning. When resuming with --stage2_only, run Stage 2
