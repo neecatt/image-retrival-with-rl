@@ -32,6 +32,23 @@ Synthetic problem: 8 queries, 12 gallery items, 4 classes, 16-d; reward = smooth
 - At σ = 0.15 the direction is unchanged but magnitude is ~0.88× (the vMF-style log-density is only an approximation of the projected-normal sampler at larger σ); σ ≤ 0.05 keeps it unbiased in this test.
 - Implementation: `training/rl_estimators.py` (`multi_sample_policy_loss`).
 
+### D7. Graded pilots, seed-42 init (jobs 4522500–4522504; 2 epochs × 1,432 batches; RL ~40 min, ApproxNDCG ~32 min)
+Init: val graded nDCG@10 89.91, nDCG@100 90.67, mAP 83.03.
+
+| Run | nDCG@100 ep 1 / ep 2 | nDCG@10 ep 2 | val mAP ep 2 | train reward (sampled) |
+|---|---|---|---|---|
+| RL S16, cw 5000, lr 2e-6 | 90.65 / **90.72** | 89.97 | 83.03 | 0.14 |
+| RL S16, cw 500 | 90.36 / 90.45 | 89.94 | 82.49 | 0.17 |
+| RL S64, cw 5000 | 90.69 / 90.70 | 89.97 | 83.06 | 0.14 |
+| ApproxNDCG lr 1e-6 | 88.53 / 87.44 | 88.20 | 76.97 | (mean ranking 0.93) |
+| ApproxNDCG lr 3e-6 | 87.57 / 87.37 | 87.94 | 77.32 | (0.94) |
+
+- **Graded RL is inert again:** the best run is +0.05 nDCG@100 and unchanged mAP, which is within noise. With a weaker anchor (cw 500) it moves, but downward.
+- **The graded differentiable control is harmful:** −3 nDCG@100 and −6 mAP after one epoch at either lr. Its selected checkpoint is worse than the init, so the init is the de facto control.
+- **Diagnosis for RL:** the sampled policy is far from the deterministic one. The sampled reward is 0.14 while the mean ranking scores ~0.93 on the same batches. With σ = 0.05 the noise vector has norm ≈ 1.1 in 512-d, and it competes with ~4,100 bank negatives, so REINFORCE optimises the reward of a mostly random ranking. Next: σ = 0.02 and 0.01, with a new `reward_mean_policy` log to measure the gap.
+- **Diagnosis for the control:** it is unclear whether the drop comes from the graded labels (exponential gains 1/3/7/15 put most weight on near-duplicates) or from the list batches and loss. Next: the same run with every verified pair at level 1 (`--binary_train_grades`).
+- Follow-ups submitted: 4522855 (RL σ 0.02), 4522856 (RL σ 0.01), 4522857 (ApproxNDCG binary labels).
+
 ### D6. Graded smoke tests (jobs 4522498 rl, 4522499 approxndcg; 30 batches each, ~5 min) — passed
 - 31,203 usable train queries over 551 landmarks (≥ 7 verified partners each).
 - Seed-42 Stage 1 init on val: graded nDCG@10 **89.91**, nDCG@100 **90.67**, mAP 83.03. This is the bar for the graded pilots.
