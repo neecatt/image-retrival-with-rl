@@ -32,6 +32,13 @@ Synthetic problem: 8 queries, 12 gallery items, 4 classes, 16-d; reward = smooth
 - At σ = 0.15 the direction is unchanged but magnitude is ~0.88× (the vMF-style log-density is only an approximation of the projected-normal sampler at larger σ); σ ≤ 0.05 keeps it unbiased in this test.
 - Implementation: `training/rl_estimators.py` (`multi_sample_policy_loss`).
 
+### D6. Graded smoke tests (jobs 4522498 rl, 4522499 approxndcg; 30 batches each, ~5 min) — passed
+- 31,203 usable train queries over 551 landmarks (≥ 7 verified partners each).
+- Seed-42 Stage 1 init on val: graded nDCG@10 **89.91**, nDCG@100 **90.67**, mAP 83.03. This is the bar for the graded pilots.
+- After 30 batches both arms are unchanged on val (nDCG@100 90.66 / 90.67), as expected for so few steps. No errors.
+- RL training reward (sampled nDCG@10) falls from 0.92 at step 0 to 0.56 averaged over the epoch as the 4,096-entry memory bank of negatives fills; ApproxNDCG's mean-embedding nDCG stays ~0.96. RL grad norm ~80 vs ~3 for ApproxNDCG (σ = 0.05 noise in 512-d has norm ≈ 1.1, so sampled rankings are much noisier than the mean ranking).
+- Pilots 4522500–4522504 started after the smokes (2 epochs × 1,432 batches, rtxpro6k).
+
 ### D5. Full graded labelling (array job 4522260 train, 4522261 val; ~25–28 min per shard)
 ALIKED + LightGlue + MAGSAC on same-landmark pairs only; files in `$HPCVAULT/datasets/sfm120k/oracle_v1/`.
 
