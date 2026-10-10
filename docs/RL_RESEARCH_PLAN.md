@@ -17,11 +17,12 @@ Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
 - [x] 2.1 Matcher chosen 2026-10-10: ALIKED (BSD-3) + LightGlue (Apache-2.0, pinned commit eb42fee in `requirements-oracle.txt`); licences checked from the official LICENSE files. Original SuperPoint is non-commercial only, so it is not used
 - [x] 2.2 Oracle pilot done (PROGRESS D4): 61 pairs/s; inliers grade same-landmark pairs from 11 (p10) to 750 (p90), noise floor ~12 for other landmarks; grades 0/1/2/3 at 25/100/300 inliers; full labelling ≈ 0.5M same-landmark pairs
 - [x] 2.4 Full graded labelling done (PROGRESS D5): 429,672 train and 149,371 val verified pairs. Relevance levels changed to 0 = other landmark, 1–4 = same landmark by inliers, so other views stay positives
-- [ ] 2.5 Graded pilot **ran** (2026-10-10, PROGRESS D7): graded RL inert (best +0.05 val nDCG@100, mAP flat); ApproxNDCG control harmful (−3 nDCG@100, −6 mAP). Sampled RL reward 0.14 vs 0.93 for the mean ranking, so σ = 0.05 is too noisy. Follow-ups running: RL σ 0.02 / 0.01 (4522855–56), ApproxNDCG with binary train labels (4522857). 3 seeds only if an arm beats the init on val
+- [x] 2.5 Graded pilot done (2026-10-10, PROGRESS D7–D8): **gate not met**. Graded RL is inert at σ 0.05 / 0.02 / 0.01, S 16 / 64 and cw 5000 (best +0.04 val nDCG@100, +0.16 mAP, not sustained), and degrades at cw 500. The ApproxNDCG control degrades (graded −3 / −6, binary labels −1.8 / −3.2 nDCG@100 / mAP). No 3-seed runs. Phase 2 with a Gaussian embedding policy is closed as negative
 - [x] 2.3 Graded training stack implemented and CPU-tested (2026-10-10): `losses/graded.py` (exact nDCG@k reward, ApproxNDCG control), `data/graded_lists.py` (candidate-list batches, masks for the query itself and unverified pairs), `training/graded_trainer.py` (modes `rl` / `approxndcg` on identical batches), graded leave-one-out val nDCG in `evaluation/sfm_val.py`, entry `scripts/train_graded.py` + `scripts/train_graded_job.sh`
 
 **Later**
-- [ ] Phase 2 main experiment: graded RL vs graded control vs binary control, 3 seeds, Medium and Hard
+- [ ] ~~Phase 2 main experiment~~ dropped: no arm passed the 2.5 gate
+- [ ] 3.0 Hard-positive SfM val metric (level 1–2 positives only) to check that selection can see benchmark-relevant changes
 - [ ] Phase 3 Plackett–Luce ranking actions; Phase 4 DINOv2, R1M, multi-scale + whitening
 - [ ] Results freeze target: 2026-10-28
 
