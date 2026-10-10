@@ -100,7 +100,7 @@ def main():
     q_map = dict(zip(queries, q_emb))
 
     rows = []
-    t0 = time.time(); t_ransac = 0.0
+    t0 = time.time(); t_ransac = 0.0; n_degenerate = 0
     with torch.no_grad():
         for q, c, is_pos in pairs:
             f0, f1 = feats[q], feats[c]
@@ -110,7 +110,11 @@ def main():
             inl = 0
             tr = time.time()
             if len(m) >= 8:
-                _, mask = cv2.findFundamentalMat(k0, k1, cv2.USAC_MAGSAC, 1.0, 0.999, 10000)
+                try:
+                    _, mask = cv2.findFundamentalMat(k0, k1, cv2.USAC_MAGSAC, 1.0, 0.999, 10000)
+                except cv2.error:
+                    # degenerate correspondences (e.g. collinear or duplicated points): no valid model
+                    mask, n_degenerate = None, n_degenerate + 1
                 inl = int(mask.sum()) if mask is not None else 0
             t_ransac += time.time() - tr
             rows.append({'q': q, 'c': c, 'pos': is_pos, 'matches': int(len(m)), 'inliers': inl,
@@ -124,6 +128,7 @@ def main():
     from scipy.stats import spearmanr
     summary = {
         'pairs': len(rows), 'queries': len(queries), 'images_featurised': len(images),
+        'degenerate_pairs': n_degenerate,
         'seconds': {'embed': round(t_embed, 1), 'features': round(t_feat, 1), 'match_total': round(t_match, 1),
                     'ransac': round(t_ransac, 1)},
         'throughput': {'images_per_s': round(len(images) / t_feat, 2), 'pairs_per_s': round(len(rows) / t_match, 2)},
