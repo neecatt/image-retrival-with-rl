@@ -53,9 +53,40 @@ def leave_one_out_map(embeddings: torch.Tensor, labels: torch.Tensor, chunk: int
             'sfm_val_queries': int(aps.numel())}
 
 
-def evaluate_sfm_val(model, val_dataset, device, batch_size: int = 16, num_workers: int = 4) -> Dict[str, float]:
+def graded_leave_one_out(embeddings: torch.Tensor, grades: dict, ks=(10, 100), chunk: int = 512) -> Dict[str, float]:
+    """Graded nDCG@k with each val image as query against all others (self excluded).
+    grades: {(i, j): grade} from geometric verification; missing pairs are grade 0
+    (val verifies every same-landmark pair, so only other landmarks are missing)."""
+    from losses.graded import ndcg_at_k
+    n = embeddings.size(0)
+    G = torch.zeros(n, n, dtype=torch.float32, device=embeddings.device)
+    if grades:
+        ij = torch.tensor(list(grades.keys()), device=embeddings.device)
+        G[ij[:, 0], ij[:, 1]] = torch.tensor(list(grades.values()), dtype=torch.float32, device=embeddings.device)
+    out = {k: [] for k in ks}
+    for start in range(0, n, chunk):
+        q = slice(start, min(start + chunk, n))
+        sim = embeddings[q] @ embeddings.t()
+        rows = torch.arange(sim.size(0), device=sim.device)
+        sim[rows, rows + start] = float('-inf')
+        for k in ks:
+            out[k].append(ndcg_at_k(sim, G[q], k))
+    res = {}
+    for k in ks:
+        v = torch.cat(out[k])
+        has = G.sum(1) > 0
+        res[f'sfm_val_graded_ndcg@{k}'] = v[has].mean().item()
+    return res
+
+
+def evaluate_sfm_val(model, val_dataset, device, batch_size: int = 16, num_workers: int = 4,
+                     grades: dict = None) -> Dict[str, float]:
     emb, lab = extract_embeddings(model, val_dataset, device, batch_size, num_workers)
     metrics = leave_one_out_map(emb, lab)
+    if grades is not None:
+        metrics.update(graded_leave_one_out(emb, grades))
+        print("  SfM-120k val graded: " + "  ".join(f"{k.split('_')[-1]}={100 * v:.2f}"
+                                                    for k, v in metrics.items() if 'graded' in k))
     print(f"  SfM-120k val: mAP={100 * metrics['sfm_val_mAP']:.2f}  "
           f"success@1={100 * metrics['sfm_val_success@1']:.2f}  "
           f"({metrics['sfm_val_queries']} queries)")
