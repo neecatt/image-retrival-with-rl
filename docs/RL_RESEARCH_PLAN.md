@@ -20,6 +20,12 @@ Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
 - [x] 2.5 Graded pilot done (2026-10-10, PROGRESS D7–D8): **gate not met**. Graded RL is inert at σ 0.05 / 0.02 / 0.01, S 16 / 64 and cw 5000 (best +0.04 val nDCG@100, +0.16 mAP, not sustained), and degrades at cw 500. The ApproxNDCG control degrades (graded −3 / −6, binary labels −1.8 / −3.2 nDCG@100 / mAP). No 3-seed runs. Phase 2 with a Gaussian embedding policy is closed as negative
 - [x] 2.3 Graded training stack implemented and CPU-tested (2026-10-10): `losses/graded.py` (exact nDCG@k reward, ApproxNDCG control), `data/graded_lists.py` (candidate-list batches, masks for the query itself and unverified pairs), `training/graded_trainer.py` (modes `rl` / `approxndcg` on identical batches), graded leave-one-out val nDCG in `evaluation/sfm_val.py`, entry `scripts/train_graded.py` + `scripts/train_graded_job.sh`
 
+**Revised path (§4b, 2026-10-11)**
+- [ ] A0 label-noise / exploration diagnostic with the verifier on Stage 1 top-20
+- [ ] A1 verifier-in-the-loop RL infrastructure (pair cache, rollout rounds, PPO-clip + GRPO + KL)
+- [ ] A2 pilot vs static (C2) and iterative re-mining (C3) controls at equal verifier budget
+- [ ] A3 5 seeds with final evaluation; Track B (pipeline reward) if A passes; Track C upgrades for all arms
+
 **Later**
 - [ ] ~~Phase 2 main experiment~~ dropped: no arm passed the 2.5 gate
 - [ ] 3.0 Hard-positive SfM val metric (level 1–2 positives only) to check that selection can see benchmark-relevant changes
@@ -137,6 +143,45 @@ Port RELER's variance reduction to the image setting:
 - **Evaluation:** R1M distractors for the final models (large galleries are where ranking rewards should matter); multi-scale testing and learned whitening applied equally to all arms.
 - **Optional:** GLDv2-clean subset if time allows.
 
+## 4b. Revised path after Phase 3 (written 2026-10-11)
+
+### Why a more complex RL algorithm alone will not help
+- PPO, GRPO, actor-critic and PL-Rank are better ways to estimate and follow the gradient of the **same** objective (expected reward). Our PL estimator already matches the exact gradient of expected AP@k (cosine 0.9999, PROGRESS E1), so a lower-variance algorithm has nothing left to fix on that objective.
+- E5 shows that with a reward computable from per-pair labels known in advance (binary AP from SfM clusters), RL and its maximum-likelihood counterpart (softmax on the same bank) end up in the same place. The bottleneck is **what** is optimised and **what information** the learner gets, not how the gradient is estimated.
+- Where RL has a structural advantage, according to the RL-for-ranking and RLVR literature, is when the reward
+  1. comes from an **expensive oracle that can only be queried for items the current policy actually retrieves** (bandit or partial feedback, as in online learning to rank and in RL with verifiable rewards for LLMs, where no target exists in advance); or
+  2. is a **non-decomposable function of the whole retrieved list or downstream pipeline** (e.g. AP after a non-differentiable re-ranking step), so no per-pair surrogate optimises it exactly.
+- Complex algorithms become worth it exactly there: when rollouts are expensive (verifier calls), **PPO-style clipped importance ratios** allow several updates per batch of verified rollouts, and **GRPO-style group normalisation** stabilises learning across queries of very different difficulty.
+
+### Track A (main): verifier-in-the-loop RL ("RLVR for retrieval")
+- **Idea:** the policy (PL ranking over the bank, as in Phase 3) retrieves a sampled top-k for each query from the training pool. The geometric verifier (ALIKED + LightGlue + MAGSAC, PROGRESS D4) labels only those retrieved pairs, with results cached. Reward: graded AP/nDCG from verified inliers. Pairs never retrieved are never labelled.
+- **Why RL should win here:** a differentiable loss needs labels for the pairs it trains on. Labelling all pairs is infeasible beyond small sets (91k² ≈ 8·10⁹ pairs in SfM-120k alone), so a control can only use pairs chosen in advance. RL gathers labels where the current policy ranks, and explores beyond the greedy top-k by sampling. It also corrects label noise: SfM-120k labels come from 3D-model clusters, so views of the same building in different models count as negatives.
+- **Algorithm:** round-based on-policy RL. Each round: embed the pool with the current model, sample PL rankings for N queries, verify new pairs (array job, cached), then run several PPO-clip epochs over these rollouts with GRPO-normalised advantages and a KL penalty to the reference ranking policy (instead of the embedding-MSE anchor). The bank-of-means trick keeps image forward passes to one batch.
+- **Fair controls (same verifier budget, same bank and batches):**
+  - C1, the softmax control on SfM labels (E5).
+  - C2, static pseudo-labels: verify the greedy top-k of the initial model once, then train the softmax control on SfM labels plus the verified pairs.
+  - C3, iterative re-mining: like C2, but re-verify the current model's greedy top-k every round. This is the strongest control.
+
+  RL must beat C3 to claim that sampling and the reward add something beyond adaptive pseudo-labelling.
+- **Go/no-go diagnostic first (~1 GPU-h):** take Stage 1's top-20 for 2,000 SfM-120k train queries and verify the pairs that the cluster labels call negatives. If almost none are true matches, label noise and exploration offer little, and Track A shrinks to its graded-reward part.
+- **Data:** start in SfM-120k (no new data). Scale-up option: GLDv2-clean or unlabelled GLDv2 images as the pool, where pre-labelling is impossible and verifier-in-the-loop is the only supervision. This needs a download and storage check first.
+
+### Track B (extension, same infrastructure): optimise the two-stage pipeline
+- Landmark retrieval systems re-rank a global shortlist with local verification (DELG + GV, RRT, CVNet). Reward: AP of the final list **after** verifier re-ranking of the top-K shortlist (and/or after α-QE). Only positives that reach the shortlist and that the verifier can confirm count; the order inside the shortlist is irrelevant. This is a non-decomposable reward of the whole list and the pipeline.
+- Evaluate ROxford/RParis with the same re-ranking applied to all arms (standard protocol in the re-ranking literature). Control: the softmax control and a Recall@k surrogate (Patel et al. 2022) on the same bank.
+
+### Track C (equal-footing upgrades, applied to every arm)
+- Larger memory bank (16k–64k; XBM), cosine lr decay or a shorter schedule (epoch 2 often falls, E2), EMA of weights, multi-scale testing and learned whitening, DINOv2 backbone (Phase 4). These raise absolute numbers for both RL and controls and are reported as such, not as RL gains.
+
+### Order and gates
+1. **A0 label-noise / exploration diagnostic** (≈ half a day). Gate: ≥ 5% of Stage 1 top-20 "negatives" verify as matches (≥ 100 inliers), or verified grades disagree with the cluster labels on ≥ 10% of the top-20.
+2. **A1 infrastructure** (≈ 2 days): pair cache, round-based rollout, verification array job, PPO-clip + GRPO + KL in `training/`; CPU tests (ratio = 1 on the first epoch reproduces the E1 gradient).
+3. **A2 pilot, seed 42** (≈ 1 day of GPU): RL vs C2 and C3 at an equal verifier budget (e.g. ≤ 300k verified pairs). Gate: RL > C3 on SfM val (graded and binary) by more than the E5 seed spread (≈ 0.3).
+4. **A3 5 seeds + final evaluation** of RL, C1, C3 (seeds 3–4 Stage 1 runs exist by then).
+5. **B** on top of A if A passes; Track C in parallel throughout.
+
+Honest risk: C3 (iterative re-mining with the same verifier) may capture most of what RL gains. If so, the result is still a clear finding (exploration vs greedy re-mining under a fixed verifier budget), and Track B remains as the second test.
+
 ## 5. Success criteria, decided now
 
 A result counts as "RL helps" only if, against the strongest matched control (graded surrogate when graded labels are used):
@@ -175,3 +220,10 @@ Anything smaller is reported as it is (e.g. "RL matches a tuned surrogate at +X%
 - Radenović, Tolias & Chum, Fine-tuning CNN Image Retrieval with No Human Annotation, TPAMI 2018: https://arxiv.org/abs/1711.02512
 - Shao et al., Global Features are All You Need for Image Retrieval and Reranking (SuperGlobal), ICCV 2023: https://arxiv.org/abs/2308.06954
 - Lee et al., Correlation Verification for Image Retrieval (CVNet), CVPR 2022: https://arxiv.org/abs/2204.01458
+- Liu et al., Retrieval-GRPO: multi-objective RL for dense retrieval in Taobao search (online top-k candidates, reward-model feedback), 2025/2026: https://arxiv.org/abs/2511.13885
+- Schulman et al., Proximal Policy Optimization Algorithms, 2017: https://arxiv.org/abs/1707.06347
+- Shao et al., DeepSeekMath (GRPO), 2024: https://arxiv.org/abs/2402.03300
+- Tan et al., Instance-level Image Retrieval using Reranking Transformers, ICCV 2021: https://arxiv.org/abs/2103.12236
+- Cao, Araujo & Sim, Unifying Deep Local and Global Features for Image Search (DELG), ECCV 2020: https://arxiv.org/abs/2001.05027
+- Iscen et al., Mining on Manifolds, CVPR 2018: https://openaccess.thecvf.com/content_cvpr_2018/papers/Iscen_Mining_on_Manifolds_CVPR_2018_paper.pdf
+- Deng et al., InsCLR: Improving Instance Retrieval with Self-Supervision, AAAI 2022: https://arxiv.org/abs/2112.01390
