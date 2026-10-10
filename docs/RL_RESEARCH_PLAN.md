@@ -16,8 +16,9 @@ Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
 **Phase 2 preparation (in parallel)**
 - [x] 2.1 Matcher chosen 2026-10-10: ALIKED (BSD-3) + LightGlue (Apache-2.0, pinned commit eb42fee in `requirements-oracle.txt`); licences checked from the official LICENSE files. Original SuperPoint is non-commercial only, so it is not used
 - [x] 2.2 Oracle pilot done (PROGRESS D4): 61 pairs/s; inliers grade same-landmark pairs from 11 (p10) to 750 (p90), noise floor ~12 for other landmarks; grades 0/1/2/3 at 25/100/300 inliers; full labelling ≈ 0.5M same-landmark pairs
-- [ ] 2.4 Full graded labelling of SfM-120k train and val (sharded job), stored under `$HPCVAULT/datasets/sfm120k/oracle_v1/`: 200 queries × (25 same-landmark + 25 hardest other-landmark) pairs; measures throughput, inlier distributions, AUC vs labels, agreement with Stage 1 similarity
-- [~] 2.3 Graded objectives implemented in `losses/graded.py` (2026-10-10): exact nDCG@k reward for RL and ApproxNDCG control loss (Qin et al. 2010), checked against hand cases and exact nDCG (gap 0.0001 at τ=0.005). Remaining: candidate-list batches with oracle grades, shared by graded RL and the graded control (designed after the 2.2 pilot)
+- [ ] 2.4 Full graded labelling **queued** (2026-10-10): train ~514k pairs in 4 shards (array job 4522260), val ~149k pairs (4522261); output `$HPCVAULT/datasets/sfm120k/oracle_v1/`. rtxpro6k chosen (earliest start; a40/a100 estimated later)
+- [ ] 2.5 Graded pilot on 1 seed: graded RL vs ApproxNDCG control vs binary control (C4), same budget; then 3 seeds with final evaluation: 200 queries × (25 same-landmark + 25 hardest other-landmark) pairs; measures throughput, inlier distributions, AUC vs labels, agreement with Stage 1 similarity
+- [x] 2.3 Graded training stack implemented and CPU-tested (2026-10-10): `losses/graded.py` (exact nDCG@k reward, ApproxNDCG control), `data/graded_lists.py` (candidate-list batches, masks for the query itself and unverified pairs), `training/graded_trainer.py` (modes `rl` / `approxndcg` on identical batches), graded leave-one-out val nDCG in `evaluation/sfm_val.py`, entry `scripts/train_graded.py` + `scripts/train_graded_job.sh`
 
 **Later**
 - [ ] Phase 2 main experiment: graded RL vs graded control vs binary control, 3 seeds, Medium and Hard
