@@ -16,7 +16,7 @@ Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
 **Phase 2 preparation (in parallel)**
 - [x] 2.1 Matcher chosen 2026-10-10: ALIKED (BSD-3) + LightGlue (Apache-2.0, pinned commit eb42fee in `requirements-oracle.txt`); licences checked from the official LICENSE files. Original SuperPoint is non-commercial only, so it is not used
 - [ ] 2.2 1% oracle pilot **submitted** (job 4521483): 200 queries × (25 same-landmark + 25 hardest other-landmark) pairs; measures throughput, inlier distributions, AUC vs labels, agreement with Stage 1 similarity
-- [ ] 2.3 Implement the graded differentiable control (LambdaLoss-style or graded Smooth-AP)
+- [~] 2.3 Graded objectives implemented in `losses/graded.py` (2026-10-10): exact nDCG@k reward for RL and ApproxNDCG control loss (Qin et al. 2010), checked against hand cases and exact nDCG (gap 0.0001 at τ=0.005). Remaining: candidate-list batches with oracle grades, shared by graded RL and the graded control (designed after the 2.2 pilot)
 
 **Later**
 - [ ] Phase 2 main experiment: graded RL vs graded control vs binary control, 3 seeds, Medium and Hard
