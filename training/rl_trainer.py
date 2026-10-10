@@ -46,6 +46,7 @@ from tqdm import tqdm
 import time
 
 from losses.rl_rewards import RetrievalReward
+from training.rl_estimators import multi_sample_policy_loss
 from utils.helpers import AverageMeter, format_time
 from utils.logger import Logger
 
@@ -136,7 +137,11 @@ class RLTrainer:
         memory_bank_size: int = 0,
         use_amp: bool = False,
         policy_weight: float = 1.0,
-        diagnostics_every: int = 0
+        diagnostics_every: int = 0,
+        num_samples: int = 1,
+        train_gallery: bool = True,
+        normalize_advantage: bool = False,
+        memory_store: str = 'sample'
     ):
         self.model = model
         self.reward_fn = reward_fn
@@ -154,6 +159,12 @@ class RLTrainer:
         # (two extra backward passes, so keep N large in real runs).
         self.policy_weight = float(policy_weight)
         self.diagnostics_every = int(diagnostics_every)
+        # num_samples > 1 switches to the multi-sample estimator; memory_store
+        # 'mean' keeps deterministic means in the bank instead of noisy samples.
+        self.num_samples = int(num_samples)
+        self.train_gallery = bool(train_gallery)
+        self.normalize_advantage = bool(normalize_advantage)
+        self.memory_store = memory_store
 
         if self.use_amp:
             self.scaler = torch.amp.GradScaler("cuda")
@@ -315,39 +326,56 @@ class RLTrainer:
         query_means = query_means.float()
         gallery_means = gallery_means.float()
 
-        # --- Sample #1: reward sample ---
-        s_query, q_log_prob = self._sample_on_sphere(query_means)
-        s_gallery, _ = self._sample_on_sphere(gallery_means)
+        extra = {}
+        if self.num_samples > 1:
+            # Multi-sample product rollouts with leave-one-out baselines and
+            # gallery gradients (training/rl_estimators.py, PROGRESS D1).
+            mem_emb, mem_labels = (self.memory_bank.get() if self.memory_bank is not None
+                                   and len(self.memory_bank) > 0 else (None, None))
+            policy_loss, ms = multi_sample_policy_loss(
+                query_means, gallery_means, query_labels, gallery_labels,
+                sigma=self.sample_std, num_samples=self.num_samples,
+                mem_emb=mem_emb, mem_labels=mem_labels,
+                sample_gallery=self.train_gallery, normalize_advantage=self.normalize_advantage)
+            per_query_reward = torch.full((query_means.size(0),), ms['reward'], device=self.device)
+            per_query_baseline = per_query_reward
+            per_query_advantage = torch.full_like(per_query_reward, ms['adv_q_abs'])
+            s_gallery = gallery_means.detach()   # memory stores fresh means
+            extra = {f'diag/{k}': v for k, v in ms.items() if k != 'reward'}
+        else:
+            # --- Sample #1: reward sample ---
+            s_query, q_log_prob = self._sample_on_sphere(query_means)
+            s_gallery, _ = self._sample_on_sphere(gallery_means)
 
-        full_gallery, full_gallery_labels = self._build_gallery(s_gallery, gallery_labels)
+            full_gallery, full_gallery_labels = self._build_gallery(s_gallery, gallery_labels)
 
-        per_query_reward = self.reward_fn.compute_per_example_reward(
-            s_query, full_gallery, query_labels, full_gallery_labels
-        )
+            per_query_reward = self.reward_fn.compute_per_example_reward(
+                s_query, full_gallery, query_labels, full_gallery_labels
+            )
 
-        # --- Baseline (no grad): configured type is honoured in AMP and fp32 alike ---
-        with torch.no_grad():
+            # --- Baseline (no grad): configured type is honoured in AMP and fp32 alike ---
+            with torch.no_grad():
+                if self.reward_fn.baseline_type == 'moving_average':
+                    per_query_baseline = self.reward_fn.get_baseline().expand_as(per_query_reward)
+                elif self.reward_fn.baseline_type == 'none':
+                    per_query_baseline = torch.zeros_like(per_query_reward)
+                elif self.reward_fn.baseline_type == 'sample':
+                    # Independent second sample (paper's Algorithm 2 style)
+                    b_query, _ = self._sample_on_sphere(query_means)
+                    b_gallery, _ = self._sample_on_sphere(gallery_means)
+                    b_full_gallery, b_full_labels = self._build_gallery(b_gallery, gallery_labels)
+                    per_query_baseline = self.reward_fn.compute_per_example_reward(
+                        b_query, b_full_gallery, query_labels, b_full_labels
+                    )
+                else:
+                    raise ValueError(f"Unknown baseline type: {self.reward_fn.baseline_type}")
+
+            per_query_advantage = per_query_reward - per_query_baseline
             if self.reward_fn.baseline_type == 'moving_average':
-                per_query_baseline = self.reward_fn.get_baseline().expand_as(per_query_reward)
-            elif self.reward_fn.baseline_type == 'none':
-                per_query_baseline = torch.zeros_like(per_query_reward)
-            elif self.reward_fn.baseline_type == 'sample':
-                # Independent second sample (paper's Algorithm 2 style)
-                b_query, _ = self._sample_on_sphere(query_means)
-                b_gallery, _ = self._sample_on_sphere(gallery_means)
-                b_full_gallery, b_full_labels = self._build_gallery(b_gallery, gallery_labels)
-                per_query_baseline = self.reward_fn.compute_per_example_reward(
-                    b_query, b_full_gallery, query_labels, b_full_labels
-                )
-            else:
-                raise ValueError(f"Unknown baseline type: {self.reward_fn.baseline_type}")
+                self.reward_fn.update_baseline(per_query_reward.mean())
 
-        per_query_advantage = per_query_reward - per_query_baseline
-        if self.reward_fn.baseline_type == 'moving_average':
-            self.reward_fn.update_baseline(per_query_reward.mean())
-
-        # Policy loss: per-example REINFORCE
-        policy_loss = -(per_query_advantage.detach() * q_log_prob).mean()
+            # Policy loss: per-example REINFORCE
+            policy_loss = -(per_query_advantage.detach() * q_log_prob).mean()
 
         # Consistency regulariser (anchors to Stage 1 model)
         consistency_loss = torch.tensor(0.0, device=self.device)
@@ -390,7 +418,8 @@ class RLTrainer:
             self.optimizer.step()
 
         if self.memory_bank is not None:
-            self.memory_bank.update(s_gallery.detach(), gallery_labels.detach())
+            stored = gallery_means if self.memory_store == 'mean' else s_gallery
+            self.memory_bank.update(stored.detach(), gallery_labels.detach())
 
         reward_mean = per_query_reward.mean().item()
         baseline_mean = per_query_baseline.mean().item()
@@ -405,6 +434,7 @@ class RLTrainer:
             'diag/adv_abs_mean': per_query_advantage.abs().mean().item(),
             'diag/adv_nonzero_frac': (per_query_advantage.abs() > 1e-6).float().mean().item(),
             **diag,
+            **extra,
         }
         return total_loss, metrics
 
