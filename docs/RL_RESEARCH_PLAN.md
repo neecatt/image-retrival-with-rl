@@ -14,8 +14,8 @@ Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
 - [ ] 1.5 Gate: ≥ +0.3 SfM val over control → 3 seeds with final evaluation
 
 **Phase 2 preparation (in parallel)**
-- [ ] 2.1 Choose the local feature + matcher, verify licences (default: ALIKED + LightGlue; no push or release decisions made yet)
-- [ ] 2.2 1% oracle pilot (~200 queries × 50 candidates): throughput and agreement with SfM landmark labels → full labelling cost estimate
+- [x] 2.1 Matcher chosen 2026-10-10: ALIKED (BSD-3) + LightGlue (Apache-2.0, pinned commit eb42fee in `requirements-oracle.txt`); licences checked from the official LICENSE files. Original SuperPoint is non-commercial only, so it is not used
+- [ ] 2.2 1% oracle pilot **submitted** (job 4521483): 200 queries × (25 same-landmark + 25 hardest other-landmark) pairs; measures throughput, inlier distributions, AUC vs labels, agreement with Stage 1 similarity
 - [ ] 2.3 Implement the graded differentiable control (LambdaLoss-style or graded Smooth-AP)
 
 **Later**
