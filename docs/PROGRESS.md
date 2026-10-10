@@ -32,6 +32,21 @@ Synthetic problem: 8 queries, 12 gallery items, 4 classes, 16-d; reward = smooth
 - At σ = 0.15 the direction is unchanged but magnitude is ~0.88× (the vMF-style log-density is only an approximation of the projected-normal sampler at larger σ); σ ≤ 0.05 keeps it unbiased in this test.
 - Implementation: `training/rl_estimators.py` (`multi_sample_policy_loss`).
 
+### D2. Phase 1 validation pilot (jobs 4521459–4521462, ~34 min each; seed-42 Stage 1, SfM val 83.03)
+Batch 32, one pass over SfM-120k (2 × 1,432 batches), σ 0.05, lr 2e-6, no clipping, memory of mean embeddings, binary AP reward.
+
+| Run | samples | consistency | adv. norm. | SfM val ep 1 / ep 2 | policy grad norm | consistency loss |
+|---|---|---|---|---|---|---|
+| S16 | 16 | 5,000 | no | 83.00 / 83.01 | 12–14 | 2–4e-6 |
+| S64 | 64 | 5,000 | no | 83.03 / 83.04 | 6–8 | 1–2e-6 |
+| S16, weaker anchor | 16 | 500 | no | 83.02 / **83.09** | 13–15 | 2–4e-5 |
+| S16, normalised adv. | 16 | 5,000 | yes | 82.94 / 82.68 | ~283 | 6–8e-5 |
+
+Reference points: control (continued FastAP) 82.96; old RL estimator 83.25 (one epoch, one seed).
+- The new estimator gives a much steadier signal (policy grad norm 6–15 instead of 100–300; >99.9% of queries carry signal), but the model **barely moves**: a consistency MSE of ~2e-6 per dimension corresponds to cosine ≈ 0.999 between new and Stage 1 embeddings. With a binary AP reward on a model that FastAP already trained, there is little left to gain.
+- Gate 1.5 (≥ control + 0.3 = 83.26) **not met**. Diagnostic follow-up with weak/no anchoring at S = 64 (jobs 4521747/4521748) checks whether the RL direction helps once the model is allowed to move.
+- Relevance-oracle pilot job 4521483 crashed on a degenerate MAGSAC fit (OpenCV assertion); fixed and resubmitted as 4521746.
+
 ## 2026-10-09/10: New Stage 1 baseline and matched comparison
 
 ### C1. New Stage 1 baseline, 3 seeds (jobs 4516394, 4516530, 4516531; ~4 h 10 min each on one RTX PRO 6000)
