@@ -32,6 +32,17 @@ Synthetic problem: 8 queries, 12 gallery items, 4 classes, 16-d; reward = smooth
 - At σ = 0.15 the direction is unchanged but magnitude is ~0.88× (the vMF-style log-density is only an approximation of the projected-normal sampler at larger σ); σ ≤ 0.05 keeps it unbiased in this test.
 - Implementation: `training/rl_estimators.py` (`multi_sample_policy_loss`).
 
+### D5. Full graded labelling (array job 4522260 train, 4522261 val; ~25–28 min per shard)
+ALIKED + LightGlue + MAGSAC on same-landmark pairs only; files in `$HPCVAULT/datasets/sfm120k/oracle_v1/`.
+
+| Split | verified pairs | level 1 (< 25 inliers) | level 2 (25–99) | level 3 (100–299) | level 4 (≥ 300) |
+|---|---|---|---|---|---|
+| train (57,416 query images, ≤ 40 per landmark × ≤ 25 partners, deduplicated) | 429,672 | 10.8% | 9.1% | 24.6% | 55.5% |
+| val (all same-landmark pairs) | 149,371 | 14.8% | 8.1% | 20.8% | 56.2% |
+
+- **Design change before any graded training:** the pilot plan graded low-inlier same-landmark pairs as 0 (irrelevant). That would teach the model to push down other views of the same landmark, which the Revisited benchmarks count as positives (often "hard"). Relevance levels are now 0 = other landmark, 1–4 = same landmark ordered by inliers (commit `fix(graded): keep same-landmark images relevant...`). Verification therefore only orders positives; it never removes them.
+- About 11–15% of same-landmark pairs show no geometric overlap; over half overlap strongly (median 344 inliers in train).
+
 ### D3. Phase 1 follow-up: does the RL direction help once the model can move? (jobs 4521748/4521749)
 Same setup as D2 with S = 64, consistency weight 50 or 0.
 
