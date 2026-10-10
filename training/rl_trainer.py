@@ -47,6 +47,7 @@ import time
 
 from losses.rl_rewards import RetrievalReward
 from training.rl_estimators import multi_sample_policy_loss
+from training.pl_policy import pl_policy_loss
 from utils.helpers import AverageMeter, format_time
 from utils.logger import Logger
 
@@ -141,7 +142,10 @@ class RLTrainer:
         num_samples: int = 1,
         train_gallery: bool = True,
         normalize_advantage: bool = False,
-        memory_store: str = 'sample'
+        memory_store: str = 'sample',
+        policy: str = 'gaussian',
+        pl_tau: float = 0.05,
+        pl_topk: int = 100
     ):
         self.model = model
         self.reward_fn = reward_fn
@@ -165,6 +169,11 @@ class RLTrainer:
         self.train_gallery = bool(train_gallery)
         self.normalize_advantage = bool(normalize_advantage)
         self.memory_store = memory_store
+        # policy 'plackett_luce': rankings are the actions (training/pl_policy.py);
+        # num_samples is then the number of sampled rankings per query.
+        if policy not in ('gaussian', 'plackett_luce'):
+            raise ValueError(f"Unknown policy: {policy}")
+        self.policy, self.pl_tau, self.pl_topk = policy, float(pl_tau), int(pl_topk)
 
         if self.use_amp:
             self.scaler = torch.amp.GradScaler("cuda")
@@ -327,7 +336,19 @@ class RLTrainer:
         gallery_means = gallery_means.float()
 
         extra = {}
-        if self.num_samples > 1:
+        if self.policy == 'plackett_luce':
+            # Every batch item ranks all others plus the memory bank of means.
+            all_means = torch.cat([query_means, gallery_means])
+            all_labels = torch.cat([query_labels, gallery_labels])
+            mem_emb, mem_labels = (self.memory_bank.get() if self.memory_bank is not None
+                                   and len(self.memory_bank) > 0 else (None, None))
+            policy_loss, ms = pl_policy_loss(all_means, all_labels, self.pl_tau, self.num_samples,
+                                             self.pl_topk, mem_emb, mem_labels)
+            per_query_reward = torch.full((query_means.size(0),), ms['reward'], device=self.device)
+            per_query_baseline = per_query_reward
+            per_query_advantage = torch.full_like(per_query_reward, ms['adv_q_abs'])
+            extra = {f'diag/{k}': v for k, v in ms.items() if k != 'reward'}
+        elif self.num_samples > 1:
             # Multi-sample product rollouts with leave-one-out baselines and
             # gallery gradients (training/rl_estimators.py, PROGRESS D1).
             mem_emb, mem_labels = (self.memory_bank.get() if self.memory_bank is not None
@@ -418,8 +439,11 @@ class RLTrainer:
             self.optimizer.step()
 
         if self.memory_bank is not None:
-            stored = gallery_means if self.memory_store == 'mean' else s_gallery
-            self.memory_bank.update(stored.detach(), gallery_labels.detach())
+            if self.policy == 'plackett_luce':
+                self.memory_bank.update(all_means.detach(), all_labels.detach())
+            else:
+                stored = gallery_means if self.memory_store == 'mean' else s_gallery
+                self.memory_bank.update(stored.detach(), gallery_labels.detach())
 
         reward_mean = per_query_reward.mean().item()
         baseline_mean = per_query_baseline.mean().item()

@@ -651,7 +651,10 @@ def train_stage2(model, dataloaders, config, device, logger):
         num_samples=stage2_config.get('num_samples', 1),
         train_gallery=stage2_config.get('train_gallery', True),
         normalize_advantage=stage2_config.get('normalize_advantage', False),
-        memory_store=stage2_config.get('memory_store', 'sample')
+        memory_store=stage2_config.get('memory_store', 'sample'),
+        policy=stage2_config.get('policy', 'gaussian'),
+        pl_tau=stage2_config.get('pl_tau', 0.05),
+        pl_topk=stage2_config.get('pl_topk', 100)
     )
     
     # Per-epoch ROxford5k monitoring is diagnostic only and off by default:
