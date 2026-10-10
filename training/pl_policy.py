@@ -77,3 +77,31 @@ def pl_policy_loss(emb: torch.Tensor, labels: torch.Tensor, tau: float, num_rank
              'adv_q_abs': adv[:, has_pos].abs().mean().item(),
              'reward_std_within_query': reward[:, has_pos].std(0).mean().item()}
     return loss, stats
+
+
+def softmax_control_loss(emb: torch.Tensor, labels: torch.Tensor, tau: float, topk: int,
+                         mem_emb: Optional[torch.Tensor] = None, mem_labels: Optional[torch.Tensor] = None
+                         ) -> Tuple[torch.Tensor, Dict[str, float]]:
+    """Differentiable control for the PL policy on identical inputs: multi-positive softmax
+    cross-entropy (SupCon, Khosla et al. 2020) over the same scores q·g/τ, batch and memory bank.
+    It is the maximum-likelihood counterpart of the PL policy (the PL first-place probability of
+    each positive), so the comparison isolates reward-driven updates from the bank and τ."""
+    B = emb.size(0)
+    gal, glab = emb, labels
+    if mem_emb is not None and mem_emb.numel() > 0:
+        gal = torch.cat([emb, mem_emb.detach()])
+        glab = torch.cat([labels, mem_labels])
+    N = gal.size(0)
+    self_mask = torch.zeros(B, N, dtype=torch.bool, device=emb.device)
+    self_mask[torch.arange(B), torch.arange(B)] = True
+    scores = (emb @ gal.t() / tau).masked_fill(self_mask, float('-inf'))
+    rel = ((labels[:, None] == glab[None, :]) & ~self_mask).float()
+    npos = rel.sum(-1)
+    has_pos = npos > 0
+    log_p = scores - scores.logsumexp(-1, keepdim=True)
+    per_q = -(log_p.masked_fill(rel == 0, 0) * rel).sum(-1) / npos.clamp(min=1)
+    loss = per_q[has_pos].mean() if has_pos.any() else scores.new_zeros(())
+    with torch.no_grad():
+        k = min(topk, N - 2)
+        greedy = ap_at_k(torch.gather(rel, -1, scores.topk(k, -1).indices), npos)
+    return loss, {'reward': greedy[has_pos].mean().item(), 'reward_mean_policy': greedy[has_pos].mean().item()}
