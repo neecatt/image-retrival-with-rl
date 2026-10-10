@@ -59,6 +59,8 @@ Status: planned; preferred first transformer is DINOv2 ViT-B/14, with DINOv3 ViT
 
 Status: plan written 2026-10-10 in [RL_RESEARCH_PLAN.md](RL_RESEARCH_PLAN.md) after the current RL method showed no gain over a matched control (PROGRESS C4). Closest prior work identified: RELER (arXiv 2610.07731, vMF embedding-space REINFORCE for text retrieval). Priority order: Phase 1 multi-sample/RLOO estimator with gallery gradients; Phase 2 verification-graded reward with a graded-surrogate control (main contribution candidate); Phase 3 Plackett–Luce ranking actions; Phase 4 DINOv2 and R1M.
 
+Update 2026-10-10: Phase 1 (binary reward, multi-sample estimator) and Phase 2 (verification-graded nDCG reward) both failed their validation gates (PROGRESS D2–D3, D7–D8). The Gaussian embedding policy either stays at the Stage 1 anchor or degrades, and the graded differentiable control degrades too. Next: a hard-positive validation metric, then Phase 3 (Plackett–Luce ranking policy, where the log-probability is an exact differentiable function of the similarity scores).
+
 - Investigate whether a gallery representative of difficult large-scale retrieval improves task-reward tuning. Candidate mechanisms include hard-negative selection, memory freshness, and reward/baseline variance reduction.
 - Choose one mechanism supported by diagnostics and prior-work analysis. Existing memory banks and consistency regularization alone are not new contributions.
 - Run targeted ablations, including a consistency-only/zero-policy-weight control where useful, to isolate the source of improvements.

@@ -32,6 +32,20 @@ Synthetic problem: 8 queries, 12 gallery items, 4 classes, 16-d; reward = smooth
 - At σ = 0.15 the direction is unchanged but magnitude is ~0.88× (the vMF-style log-density is only an approximation of the projected-normal sampler at larger σ); σ ≤ 0.05 keeps it unbiased in this test.
 - Implementation: `training/rl_estimators.py` (`multi_sample_policy_loss`).
 
+### D8. Noise and label follow-ups (jobs 4522855–4522857; same init, budget and selection as D7)
+
+| Run | nDCG@100 ep 1 / ep 2 | val mAP ep 1 / ep 2 | train reward sampled / mean ranking |
+|---|---|---|---|
+| RL S16, cw 5000, σ 0.02 | 90.67 / 90.67 | 83.04 / 83.06 | 0.79 / 0.93 |
+| RL S16, cw 5000, σ 0.01 | **90.71** / 90.61 | **83.19** / 82.96 | 0.90 / 0.93 |
+| ApproxNDCG, binary train labels, lr 1e-6 | 89.11 / 88.90 | 80.40 / 79.82 | – / 0.97 |
+
+Init: 90.67 / 83.03.
+- **Lower noise closes the sampling gap but RL still does not move.** At σ = 0.01 the sampled reward (0.90) is close to the mean ranking (0.93), yet the best epoch is +0.04 nDCG@100 and +0.16 mAP, and it is gone one epoch later. That is within noise. The anchored model stays within a consistency MSE of ~4e-5 of Stage 1 in every run, and every weaker anchor (D3, D7) made it worse.
+- **The list batches themselves hurt the differentiable control.** Binary labels halve the damage (−1.8 nDCG@100, −3.2 mAP vs −3 / −6 with graded gains), so both the graded gains and the 4-landmark candidate-list batches contribute. For comparison, FastAP on 8-landmark PK batches holds 82.96 (C3).
+- **Phase 2 verdict (Gaussian embedding policy, graded nDCG reward): negative.** No arm beats the init on validation, so no 3-seed runs. Across Phases 1–2 the policy either stays at the anchor or degrades.
+- **Open concern:** SfM val is close to saturation (success@1 98.6%, mAP 83). C4 showed +0.24 ROxford mAP for the matched control while its SfM val fell by 0.07, so small benchmark changes may be invisible to this selection metric. A hard-positive val metric (only low-overlap level 1–2 positives, like Revisited Hard) is cheap to add from the oracle labels.
+
 ### D7. Graded pilots, seed-42 init (jobs 4522500–4522504; 2 epochs × 1,432 batches; RL ~40 min, ApproxNDCG ~32 min)
 Init: val graded nDCG@10 89.91, nDCG@100 90.67, mAP 83.03.
 
@@ -47,7 +61,7 @@ Init: val graded nDCG@10 89.91, nDCG@100 90.67, mAP 83.03.
 - **The graded differentiable control is harmful:** −3 nDCG@100 and −6 mAP after one epoch at either lr. Its selected checkpoint is worse than the init, so the init is the de facto control.
 - **Diagnosis for RL:** the sampled policy is far from the deterministic one. The sampled reward is 0.14 while the mean ranking scores ~0.93 on the same batches. With σ = 0.05 the noise vector has norm ≈ 1.1 in 512-d, and it competes with ~4,100 bank negatives, so REINFORCE optimises the reward of a mostly random ranking. Next: σ = 0.02 and 0.01, with a new `reward_mean_policy` log to measure the gap.
 - **Diagnosis for the control:** it is unclear whether the drop comes from the graded labels (exponential gains 1/3/7/15 put most weight on near-duplicates) or from the list batches and loss. Next: the same run with every verified pair at level 1 (`--binary_train_grades`).
-- Follow-ups submitted: 4522855 (RL σ 0.02), 4522856 (RL σ 0.01), 4522857 (ApproxNDCG binary labels).
+- Follow-ups: see D8.
 
 ### D6. Graded smoke tests (jobs 4522498 rl, 4522499 approxndcg; 30 batches each, ~5 min) — passed
 - 31,203 usable train queries over 551 landmarks (≥ 7 verified partners each).
