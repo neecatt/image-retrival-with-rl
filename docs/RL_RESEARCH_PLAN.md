@@ -25,8 +25,9 @@ Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
 - [ ] 3.0 Hard-positive SfM val metric (level 1–2 positives only) to check that selection can see benchmark-relevant changes
 **Phase 3: rankings as actions**
 - [x] 3.1 Plackett–Luce policy implemented (2026-10-10, commit `feat(rl): add Plackett-Luce ranking policy...`, `training/pl_policy.py`, `training.stage2.policy=plackett_luce`). CPU check (PROGRESS E1): exact log-prob, Gumbel sampler matches PL, gradient estimate vs exact gradient cosine 0.9999
-- [ ] 3.2 Pilot **submitted**: smoke 4525046 failed on a YAML string learning rate (`2e-6`), resubmitted as 4525122; grid τ 0.02 / 0.05 / 0.01 without anchor and τ 0.02 with consistency 5,000 (4525123–26, rtxpro6k, start ≈ 01:30). Same budget, batches, init and selection as the C4 RL arm, so the C4 control is reused
-- [ ] 3.3 Gate: best pilot > 83.10 SfM val (C4 RL mean) or clearly above the init; then 3 seeds with final evaluation against the C4 control
+- [x] 3.2 Pilot done (PROGRESS E2): τ 0.02 without anchor **84.23 SfM val (+1.20 over init)**, τ 0.01 83.87 (+0.84), τ 0.05 81.48 (−1.55)
+- [x] 3.3 Gate (> 83.10 SfM val) **met**. 3 seeds × τ {0.02, 0.01} with final evaluation submitted (4525409–14)
+- [ ] 3.4 Memory-bank differentiable control (same bank, batches and budget), needed to attribute the gain to RL rather than the bank
 - [ ] Phase 4 DINOv2, R1M, multi-scale + whitening
 - [ ] Results freeze target: 2026-10-28
 
