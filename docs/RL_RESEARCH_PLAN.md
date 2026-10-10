@@ -28,7 +28,7 @@ Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
 - [x] 3.2 Pilot done (PROGRESS E2): τ 0.02 without anchor **84.23 SfM val (+1.20 over init)**, τ 0.01 83.87 (+0.84), τ 0.05 81.48 (−1.55)
 - [x] 3.3 Gate (> 83.10 SfM val) **met**. 3 seeds × τ {0.02, 0.01} with final evaluation submitted (4525409–14)
 - [x] 3.3b 3 seeds done (PROGRESS E3): PL τ 0.01 vs Stage 1 +1.21 SfM val, ROxf M/H +0.74 / +1.50, RPar M/H +1.46 / +0.67; vs FastAP control +0.50 / +0.82 / +1.08 / +0.35 (one seed negative on ROxf M). §5 criterion met on RParis Medium only
-- [ ] 3.4 Memory-bank differentiable control **submitted** (PROGRESS E4): softmax/SupCon on identical scores, batch and bank; τ grid 4525724–26
+- [ ] 3.4 Memory-bank control pilot done (PROGRESS E4): best τ 0.02 at **84.59 val vs PL 84.23** (seed 42), so the PL gain is likely the bank + listwise objective, not RL. 3 seeds with final evaluation running
 - [ ] 3.5 Five seeds: Stage 1 seeds 3–4 training (4525720–21), then FastAP control, softmax control (best τ) and PL τ 0.01 on seeds 3–4 with final evaluation
 - [ ] Phase 4 DINOv2, R1M, multi-scale + whitening
 - [ ] Results freeze target: 2026-10-28
