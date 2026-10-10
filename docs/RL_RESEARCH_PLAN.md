@@ -8,9 +8,9 @@ Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
 
 **Phase 1: competent estimator**
 - [x] 1.1 CPU test (2026-10-10, PROGRESS D1): single-update alignment with the true gradient rises from 0.12 (current trainer) to 0.69 (S=16) and 0.89 (S=64); training the gallery removes the bias (mean cos 0.99)
-- [ ] 1.2 Implement in the RL trainer: G samples per query and gallery item, product rollouts, leave-one-out baseline, gallery gradients, memory bank of fresh means, variance logging
-- [ ] 1.3 GPU smoke test of the new path
-- [ ] 1.4 Validation pilot from the seed-42 Stage 1 (G = 16/64, 1–3 passes) vs the control's best (82.96)
+- [x] 1.2 Implemented (commit `feat(rl): use the multi-sample estimator...`): `training.stage2.num_samples`, `memory_store: mean`, `train_gallery`, `normalize_advantage`; CPU-tested with a tiny model
+- [ ] 1.3 GPU smoke test: folded into the 1.4 pilot jobs (first minutes of each job)
+- [ ] 1.4 Validation pilot **running** (jobs 4521459–4521462, 2026-10-10): seed-42 Stage 1, batch 32, one pass, σ 0.05, lr 2e-6, mean memory; S=16 / S=64 / S=16 with consistency 500 / S=16 with normalised advantages. Bar: control 82.96, old RL 83.25
 - [ ] 1.5 Gate: ≥ +0.3 SfM val over control → 3 seeds with final evaluation
 
 **Phase 2 preparation (in parallel)**
