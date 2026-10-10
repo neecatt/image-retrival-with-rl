@@ -11,11 +11,12 @@ Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
 - [x] 1.2 Implemented (commit `feat(rl): use the multi-sample estimator...`): `training.stage2.num_samples`, `memory_store: mean`, `train_gallery`, `normalize_advantage`; CPU-tested with a tiny model
 - [x] 1.3 GPU smoke test passed inside the 1.4 jobs (all four completed)
 - [x] 1.4 Validation pilot done (PROGRESS D2): 82.68–83.09 vs start 83.03 and control 82.96; signal is far steadier but the anchored model barely moves. Follow-up with weak/no anchoring at S=64 running (jobs 4521748/4521749)
-- [ ] 1.5 Gate (≥ 83.26 SfM val): **not met** so far (best 83.09). Decision pending the weak-anchor follow-up; Phase 2 proceeds regardless
+- [x] 1.5 Gate (≥ 83.26 SfM val): **not met**. Weak/no anchoring makes it worse (81.86 / 79.22, PROGRESS D3). Phase 1 closed: binary-reward RL is inert or harmful; Phase 2 is the path
 
 **Phase 2 preparation (in parallel)**
 - [x] 2.1 Matcher chosen 2026-10-10: ALIKED (BSD-3) + LightGlue (Apache-2.0, pinned commit eb42fee in `requirements-oracle.txt`); licences checked from the official LICENSE files. Original SuperPoint is non-commercial only, so it is not used
-- [ ] 2.2 1% oracle pilot **resubmitted** as job 4521746 after a degenerate-fit crash in 4521483: 200 queries × (25 same-landmark + 25 hardest other-landmark) pairs; measures throughput, inlier distributions, AUC vs labels, agreement with Stage 1 similarity
+- [x] 2.2 Oracle pilot done (PROGRESS D4): 61 pairs/s; inliers grade same-landmark pairs from 11 (p10) to 750 (p90), noise floor ~12 for other landmarks; grades 0/1/2/3 at 25/100/300 inliers; full labelling ≈ 0.5M same-landmark pairs
+- [ ] 2.4 Full graded labelling of SfM-120k train and val (sharded job), stored under `$HPCVAULT/datasets/sfm120k/oracle_v1/`: 200 queries × (25 same-landmark + 25 hardest other-landmark) pairs; measures throughput, inlier distributions, AUC vs labels, agreement with Stage 1 similarity
 - [~] 2.3 Graded objectives implemented in `losses/graded.py` (2026-10-10): exact nDCG@k reward for RL and ApproxNDCG control loss (Qin et al. 2010), checked against hand cases and exact nDCG (gap 0.0001 at τ=0.005). Remaining: candidate-list batches with oracle grades, shared by graded RL and the graded control (designed after the 2.2 pilot)
 
 **Later**

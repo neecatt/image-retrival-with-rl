@@ -32,6 +32,30 @@ Synthetic problem: 8 queries, 12 gallery items, 4 classes, 16-d; reward = smooth
 - At σ = 0.15 the direction is unchanged but magnitude is ~0.88× (the vMF-style log-density is only an approximation of the projected-normal sampler at larger σ); σ ≤ 0.05 keeps it unbiased in this test.
 - Implementation: `training/rl_estimators.py` (`multi_sample_policy_loss`).
 
+### D3. Phase 1 follow-up: does the RL direction help once the model can move? (jobs 4521748/4521749)
+Same setup as D2 with S = 64, consistency weight 50 or 0.
+
+| Run | SfM val ep 1 / ep 2 | consistency loss |
+|---|---|---|
+| consistency 50 | 82.45 / 81.86 | 1.4–2.8e-4 |
+| consistency 0 | 81.40 / 79.22 | – |
+| control lr 1e-5 (C3), for scale | 82.14 / 81.98 | – |
+
+- **Unconstrained binary-reward RL actively lowers held-out mAP**, faster than continued FastAP at a comparable step size. The well-estimated gradient optimises expected AP of *noisy* embeddings on training landmarks, which does not transfer to deterministic retrieval on new landmarks.
+- **Phase 1 closed:** with binary rewards, RL is either inert (anchored) or harmful (free). Effort moves to the graded reward (Phase 2), as the plan anticipated.
+
+### D4. Relevance-oracle pilot (job 4521746, 10 min; 200 queries × 50 pairs, ALIKED + LightGlue + MAGSAC, long side 1024)
+| | p10 | p25 | median | p75 | p90 |
+|---|---|---|---|---|---|
+| inliers, same-landmark pairs | 11 | 27 | 230 | 512 | 750 |
+| inliers, hardest other-landmark pairs | 8 | 10 | 12 | 15 | 23 |
+
+- Throughput: 51 images/s (features), 61 pairs/s (matching + RANSAC; RANSAC on one CPU core is ~40% of the time). One degenerate fit in 10,000 pairs.
+- 18.6% of same-landmark pairs have < 15 inliers (same landmark, non-overlapping view); 3.5% of other-landmark pairs have ≥ 50 (possible label noise or repeated structures); the other-landmark noise floor is ~10–25 inliers.
+- AUC for separating same/other landmark: inliers 0.863 vs Stage 1 similarity 0.898. Within same-landmark pairs, inliers vs Stage 1 similarity Spearman 0.63.
+- **Conclusion:** inlier counts are a graded, view-level relevance signal that neither the binary labels nor the current model capture. Planned grades (same-landmark pairs only; other landmarks stay 0): 0 = < 25 inliers, 1 = 25–99, 2 = 100–299, 3 = ≥ 300.
+- Full-labelling cost: only same-landmark pairs need verification. ~22k queries (up to 40 per landmark) × ≤ 25 positives ≈ 0.5M pairs ≈ 2–3 GPU-hours at pilot speed, less with parallel RANSAC; split into shards.
+
 ### D2. Phase 1 validation pilot (jobs 4521459–4521462, ~34 min each; seed-42 Stage 1, SfM val 83.03)
 Batch 32, one pass over SfM-120k (2 × 1,432 batches), σ 0.05, lr 2e-6, no clipping, memory of mean embeddings, binary AP reward.
 
