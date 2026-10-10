@@ -13,6 +13,25 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 | P5 | Policy gradient norm is 100–300 vs 0.06–0.08 for the consistency term; `gradient_clip: 1.0` clips 90–100% of steps | The consistency regulariser has no practical effect; updates are clipped to unit norm every step | Measured (B2). Addressed together with P2 |
 | P6 | Gallery embeddings are sampled but receive no policy gradient; memory-bank entries come from older parameters | The objective is "query-only, given a noisy gallery", not full expected AP | Acceptable if stated explicitly in the paper; not changed |
 
+## 2026-10-10: Phase 1 of the RL research plan ([RL_RESEARCH_PLAN.md](RL_RESEARCH_PLAN.md))
+
+### D1. Multi-sample estimator audit (CPU, `scripts/audit_multisample.py`)
+Synthetic problem: 8 queries, 12 gallery items, 4 classes, 16-d; reward = smooth AP so the exact gradient of the expected reward is known (pathwise, 40k samples). Estimators use reward values only. "Single-estimate cos" = median cosine between one gradient estimate and the truth (higher = less variance); "mean cos" = cosine of the average of 100–300 estimates (bias check).
+
+| Estimator (σ = 0.05) | single-estimate cos, query part | single-estimate cos, all params | mean cos | |mean|/|truth| |
+|---|---|---|---|---|
+| current trainer (1 sample + 1 baseline sample, query only) | 0.12 | 0.10 | 0.75 | 0.81 |
+| S = 4, product rollouts, query only | 0.38 | 0.31 | 0.79 | 0.82 |
+| S = 16, query only | 0.69 | 0.56 | 0.81 | 0.82 |
+| S = 64, query only | 0.89 | 0.72 | 0.81 | 0.80 |
+| S = 16, query + gallery | 0.69 | 0.41 | **0.98** | 1.00 |
+| S = 64, query + gallery | 0.89 | 0.67 | **0.99** | 1.00 |
+
+- One update of the current trainer is almost pure noise (cos 0.12 with the true direction); S = 64 product rollouts reach 0.89 at no extra network cost.
+- Training the gallery is required to follow the full objective: query-only estimators plateau at mean cos ~0.8 because half of the true gradient (gallery part) is missing.
+- At σ = 0.15 the direction is unchanged but magnitude is ~0.88× (the vMF-style log-density is only an approximation of the projected-normal sampler at larger σ); σ ≤ 0.05 keeps it unbiased in this test.
+- Implementation: `training/rl_estimators.py` (`multi_sample_policy_loss`).
+
 ## 2026-10-09/10: New Stage 1 baseline and matched comparison
 
 ### C1. New Stage 1 baseline, 3 seeds (jobs 4516394, 4516530, 4516531; ~4 h 10 min each on one RTX PRO 6000)

@@ -2,6 +2,29 @@
 
 Written 2026-10-10 after the 3-seed comparison in [PROGRESS.md](PROGRESS.md) (C4) showed no gain from the current RL method. This document explains why, what the literature says, and the path most likely to produce a real, defensible RL result. Status of each step is tracked in [ROADMAP.md](ROADMAP.md).
 
+## 0. Execution status
+
+Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
+
+**Phase 1: competent estimator**
+- [x] 1.1 CPU test (2026-10-10, PROGRESS D1): single-update alignment with the true gradient rises from 0.12 (current trainer) to 0.69 (S=16) and 0.89 (S=64); training the gallery removes the bias (mean cos 0.99)
+- [ ] 1.2 Implement in the RL trainer: G samples per query and gallery item, product rollouts, leave-one-out baseline, gallery gradients, memory bank of fresh means, variance logging
+- [ ] 1.3 GPU smoke test of the new path
+- [ ] 1.4 Validation pilot from the seed-42 Stage 1 (G = 16/64, 1–3 passes) vs the control's best (82.96)
+- [ ] 1.5 Gate: ≥ +0.3 SfM val over control → 3 seeds with final evaluation
+
+**Phase 2 preparation (in parallel)**
+- [ ] 2.1 Choose the local feature + matcher, verify licences (default: ALIKED + LightGlue; no push or release decisions made yet)
+- [ ] 2.2 1% oracle pilot (~200 queries × 50 candidates): throughput and agreement with SfM landmark labels → full labelling cost estimate
+- [ ] 2.3 Implement the graded differentiable control (LambdaLoss-style or graded Smooth-AP)
+
+**Later**
+- [ ] Phase 2 main experiment: graded RL vs graded control vs binary control, 3 seeds, Medium and Hard
+- [ ] Phase 3 Plackett–Luce ranking actions; Phase 4 DINOv2, R1M, multi-scale + whitening
+- [ ] Results freeze target: 2026-10-28
+
+**Open decisions for the user:** non-commercial matcher licences acceptable? Git remote for pushing (nothing pushed; README still has old claims to correct first)?
+
 ## 1. Where we stand (measured, not assumed)
 
 | | ROxford M / H | RParis M / H |
