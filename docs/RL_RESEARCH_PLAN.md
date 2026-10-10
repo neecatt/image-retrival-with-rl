@@ -10,7 +10,7 @@ Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
 - [x] 1.1 CPU test (2026-10-10, PROGRESS D1): single-update alignment with the true gradient rises from 0.12 (current trainer) to 0.69 (S=16) and 0.89 (S=64); training the gallery removes the bias (mean cos 0.99)
 - [x] 1.2 Implemented (commit `feat(rl): use the multi-sample estimator...`): `training.stage2.num_samples`, `memory_store: mean`, `train_gallery`, `normalize_advantage`; CPU-tested with a tiny model
 - [x] 1.3 GPU smoke test passed inside the 1.4 jobs (all four completed)
-- [x] 1.4 Validation pilot done (PROGRESS D2): 82.68–83.09 vs start 83.03 and control 82.96; signal is far steadier but the anchored model barely moves. Follow-up with weak/no anchoring at S=64 running (jobs 4521747/4521748)
+- [x] 1.4 Validation pilot done (PROGRESS D2): 82.68–83.09 vs start 83.03 and control 82.96; signal is far steadier but the anchored model barely moves. Follow-up with weak/no anchoring at S=64 running (jobs 4521748/4521749)
 - [ ] 1.5 Gate (≥ 83.26 SfM val): **not met** so far (best 83.09). Decision pending the weak-anchor follow-up; Phase 2 proceeds regardless
 
 **Phase 2 preparation (in parallel)**
