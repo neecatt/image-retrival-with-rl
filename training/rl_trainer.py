@@ -47,7 +47,7 @@ import time
 
 from losses.rl_rewards import RetrievalReward
 from training.rl_estimators import multi_sample_policy_loss
-from training.pl_policy import pl_policy_loss
+from training.pl_policy import pl_policy_loss, softmax_control_loss
 from utils.helpers import AverageMeter, format_time
 from utils.logger import Logger
 
@@ -171,7 +171,8 @@ class RLTrainer:
         self.memory_store = memory_store
         # policy 'plackett_luce': rankings are the actions (training/pl_policy.py);
         # num_samples is then the number of sampled rankings per query.
-        if policy not in ('gaussian', 'plackett_luce'):
+        # policy 'softmax_control': differentiable control on the same scores, batch and bank.
+        if policy not in ('gaussian', 'plackett_luce', 'softmax_control'):
             raise ValueError(f"Unknown policy: {policy}")
         self.policy, self.pl_tau, self.pl_topk = policy, float(pl_tau), int(pl_topk)
 
@@ -336,14 +337,19 @@ class RLTrainer:
         gallery_means = gallery_means.float()
 
         extra = {}
-        if self.policy == 'plackett_luce':
+        if self.policy in ('plackett_luce', 'softmax_control'):
             # Every batch item ranks all others plus the memory bank of means.
             all_means = torch.cat([query_means, gallery_means])
             all_labels = torch.cat([query_labels, gallery_labels])
             mem_emb, mem_labels = (self.memory_bank.get() if self.memory_bank is not None
                                    and len(self.memory_bank) > 0 else (None, None))
-            policy_loss, ms = pl_policy_loss(all_means, all_labels, self.pl_tau, self.num_samples,
-                                             self.pl_topk, mem_emb, mem_labels)
+            if self.policy == 'plackett_luce':
+                policy_loss, ms = pl_policy_loss(all_means, all_labels, self.pl_tau, self.num_samples,
+                                                 self.pl_topk, mem_emb, mem_labels)
+            else:
+                policy_loss, ms = softmax_control_loss(all_means, all_labels, self.pl_tau, self.pl_topk,
+                                                       mem_emb, mem_labels)
+                ms['adv_q_abs'] = 0.0
             per_query_reward = torch.full((query_means.size(0),), ms['reward'], device=self.device)
             per_query_baseline = per_query_reward
             per_query_advantage = torch.full_like(per_query_reward, ms['adv_q_abs'])
@@ -439,7 +445,7 @@ class RLTrainer:
             self.optimizer.step()
 
         if self.memory_bank is not None:
-            if self.policy == 'plackett_luce':
+            if self.policy in ('plackett_luce', 'softmax_control'):
                 self.memory_bank.update(all_means.detach(), all_labels.detach())
             else:
                 stored = gallery_means if self.memory_store == 'mean' else s_gallery
