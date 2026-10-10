@@ -1,10 +1,12 @@
 """
 Candidate-list batches with graded relevance (Phase 2 of docs/RL_RESEARCH_PLAN.md).
 
-Grades come from geometric verification of same-landmark pairs
-(scripts/oracle_label.py): inliers < 25 -> 0, 25-99 -> 1, 100-299 -> 2, >= 300 -> 3.
-Pairs from different landmarks are grade 0 by construction. Same-landmark pairs
-that were not verified are unknown and are masked out of rankings.
+Relevance levels: different landmark = 0. Same landmark, by geometric
+verification (scripts/oracle_label.py): inliers < 25 -> 1, 25-99 -> 2,
+100-299 -> 3, >= 300 -> 4. Same-landmark images without visible overlap stay
+relevant (level 1) because the Revisited benchmarks count other views of a
+landmark as positives; verification only orders positives. Same-landmark
+pairs that were not verified are unknown and are masked out of rankings.
 
 A batch holds B queries from B distinct landmarks, each with C verified
 same-landmark candidates. Every image in the batch is gallery for every query
@@ -27,14 +29,14 @@ def inliers_to_grade(inliers: np.ndarray) -> np.ndarray:
 
 
 def load_oracle(oracle_dir: str, split: str) -> Dict[Tuple[int, int], int]:
-    """{(i, j): grade} for verified pairs, both orders."""
+    """{(i, j): relevance level 1-4} for verified same-landmark pairs, both orders."""
     grades = {}
     files = sorted(Path(oracle_dir).glob(f'{split}_shard*.npz'))
     if not files:
         raise FileNotFoundError(f"no {split}_shard*.npz in {oracle_dir}")
     for f in files:
         d = np.load(f)
-        for i, j, g in zip(d['i'].tolist(), d['j'].tolist(), inliers_to_grade(d['inliers']).tolist()):
+        for i, j, g in zip(d['i'].tolist(), d['j'].tolist(), (1 + inliers_to_grade(d['inliers'])).tolist()):
             grades[(i, j)] = g
             grades[(j, i)] = g
     return grades
