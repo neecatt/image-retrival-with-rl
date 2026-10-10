@@ -13,6 +13,23 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 | P5 | Policy gradient norm is 100–300 vs 0.06–0.08 for the consistency term; `gradient_clip: 1.0` clips 90–100% of steps | The consistency regulariser has no practical effect; updates are clipped to unit norm every step | Measured (B2). Addressed together with P2 |
 | P6 | Gallery embeddings are sampled but receive no policy gradient; memory-bank entries come from older parameters | The objective is "query-only, given a noisy gallery", not full expected AP | Acceptable if stated explicitly in the paper; not changed |
 
+## 2026-10-11: Revised plan, Track A (verifier-in-the-loop RL)
+
+### A0. Label-noise / exploration diagnostic (job 4527211, a40, 72 min incl. embedding 91,642 train images)
+Seed-42 Stage 1; 2,000 random SfM-120k train queries × top-20 = 40,000 retrieved pairs, all verified (ALIKED + LightGlue + MAGSAC). Output: `results/a0_label_noise/` (pairs, summary, contact sheets); train embeddings cached on `$HPCVAULT/runs/a0_label_noise/`.
+
+| | ranks 1–5 | 6–10 | 11–20 | all top-20 |
+|---|---|---|---|---|
+| retrieved items labelled negative (other 3D model) | 1.7% | 2.6% | 3.5% | 2.8% |
+| … of those, verified match (≥ 100 inliers) | 22.9% | 16.3% | 16.3% | 17.3% (44.0% at ≥ 25) |
+| retrieved positives with no support (< 25 inliers) | 1.5% | 2.8% | 4.0% | 3.1% |
+
+- **The verifier finds real label noise.** Contact sheets of the strongest "negatives" show the same landmark every time (Casa Batlló, Powder Tower, Tower Bridge, St Vitus, Colosseum, Torre Agbar, identical fresco ceilings): SfM-120k splits some landmarks into several 3D models, which the cluster labels treat as different.
+- **But on the training pool there is little of it to exploit.** The Stage 1 model has fitted its own training images: 97% of the top-20 are already labelled positives. Verified false negatives are 0.5% of retrieved pairs and touch 3.4% of queries; overall label/verifier disagreement is 3.5%.
+- **Gate (§4b):** the first condition is met (17% of retrieved negatives verify, threshold 5%); the second is not (disagreement 3.5%, threshold 10%). Formally a pass, but the absolute signal on SfM-120k train is small.
+- **Implication:** verifier-in-the-loop RL needs a pool the model has not memorised (held-out or unlabelled images, e.g. a GLDv2 subset), where the top-k is far from saturated and pre-labelling is impossible.
+- **Throughput:** 14.9 pairs/s here, because each pair re-extracted features; the labelling job (D5) reached 61 pairs/s by sharing features. A1 must cache features per image.
+
 ## 2026-10-10: Phase 3, rankings as actions
 
 ### E1. Plackett–Luce ranking policy (implementation and CPU check)
