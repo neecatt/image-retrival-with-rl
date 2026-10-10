@@ -21,6 +21,11 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 - **CPU checks:** log-probabilities match a brute-force sequential computation to 1e-10, and all top-2 lists sum to probability 1. Gumbel top-k frequencies match PL (first place 0.580 vs 0.579; a specific pair 0.295 vs 0.293). On an enumerable toy problem (6 items, k = 4) the averaged estimate has cosine **0.9999** with the exact gradient of expected AP@k from finite differences. For comparison, the Gaussian policy reached 0.69–0.89 (D1).
 - **Pilot (submitted 18:30):** same budget, batches, init (seed-42 Stage 1), learning rate (2e-6) and selection as the C4 RL arm, so the 3-seed C4 control is reused. Grid: τ ∈ {0.01, 0.02, 0.05} without anchor, plus τ = 0.02 with consistency 5,000. Smoke 4525046 failed because YAML reads `2e-6` as a string (learning rate now written `0.000002`); resubmitted as smoke 4525122 (a100mig) and pilots 4525123–26 (rtxpro6k); every full GPU partition is booked until ~01:15–01:30.
 
+### E4. Memory-bank control and extra seeds (submitted 2026-10-10 ~20:45)
+- **Control:** `training.stage2.policy=softmax_control` (`training/pl_policy.py`), a multi-positive softmax cross-entropy (SupCon) over the same scores q·g/τ, the same all-vs-all batches, the same 4,096 bank of means, lr, budget and selection, run in the same trainer. It is the maximum-likelihood counterpart of the PL policy, so a PL gain over it cannot come from the bank, τ or the batch layout. CPU toy: both modes learn (greedy AP 0.56 / 0.55 after 30 steps).
+- **Control τ grid (seed 42; same tuning effort as the PL τ grid):** τ 0.01 / 0.02 / 0.05, jobs 4525724–4525726. The best τ on val then gets 5 seeds with final evaluation.
+- **Stage 1 seeds 3 and 4** (jobs 4525720–4525721, ~4 h each, same recipe as C1), so every arm can be run on 5 seeds: Stage 1, FastAP control, softmax control, PL τ 0.01.
+
 ### E3. Plackett–Luce 3 seeds with final evaluation (jobs 4525409–4525414, 31–35 min each incl. staging and evaluation)
 Best epoch on SfM val per run; benchmarks scored once on it (official scoring, longer side 1024). Stage 1, control and Gaussian RL rows are the C4 runs (same inits, budget, batches, lr and selection).
 
