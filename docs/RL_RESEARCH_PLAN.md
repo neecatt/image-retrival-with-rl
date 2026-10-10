@@ -27,6 +27,7 @@ Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
 - [x] 3.1 Plackett–Luce policy implemented (2026-10-10, commit `feat(rl): add Plackett-Luce ranking policy...`, `training/pl_policy.py`, `training.stage2.policy=plackett_luce`). CPU check (PROGRESS E1): exact log-prob, Gumbel sampler matches PL, gradient estimate vs exact gradient cosine 0.9999
 - [x] 3.2 Pilot done (PROGRESS E2): τ 0.02 without anchor **84.23 SfM val (+1.20 over init)**, τ 0.01 83.87 (+0.84), τ 0.05 81.48 (−1.55)
 - [x] 3.3 Gate (> 83.10 SfM val) **met**. 3 seeds × τ {0.02, 0.01} with final evaluation submitted (4525409–14)
+- [x] 3.3b 3 seeds done (PROGRESS E3): PL τ 0.01 vs Stage 1 +1.21 SfM val, ROxf M/H +0.74 / +1.50, RPar M/H +1.46 / +0.67; vs FastAP control +0.50 / +0.82 / +1.08 / +0.35 (one seed negative on ROxf M). §5 criterion met on RParis Medium only
 - [ ] 3.4 Memory-bank differentiable control (same bank, batches and budget), needed to attribute the gain to RL rather than the bank
 - [ ] Phase 4 DINOv2, R1M, multi-scale + whitening
 - [ ] Results freeze target: 2026-10-28

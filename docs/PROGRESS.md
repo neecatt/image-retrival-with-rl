@@ -21,6 +21,33 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 - **CPU checks:** log-probabilities match a brute-force sequential computation to 1e-10, and all top-2 lists sum to probability 1. Gumbel top-k frequencies match PL (first place 0.580 vs 0.579; a specific pair 0.295 vs 0.293). On an enumerable toy problem (6 items, k = 4) the averaged estimate has cosine **0.9999** with the exact gradient of expected AP@k from finite differences. For comparison, the Gaussian policy reached 0.69–0.89 (D1).
 - **Pilot (submitted 18:30):** same budget, batches, init (seed-42 Stage 1), learning rate (2e-6) and selection as the C4 RL arm, so the 3-seed C4 control is reused. Grid: τ ∈ {0.01, 0.02, 0.05} without anchor, plus τ = 0.02 with consistency 5,000. Smoke 4525046 failed because YAML reads `2e-6` as a string (learning rate now written `0.000002`); resubmitted as smoke 4525122 (a100mig) and pilots 4525123–26 (rtxpro6k); every full GPU partition is booked until ~01:15–01:30.
 
+### E3. Plackett–Luce 3 seeds with final evaluation (jobs 4525409–4525414, 31–35 min each incl. staging and evaluation)
+Best epoch on SfM val per run; benchmarks scored once on it (official scoring, longer side 1024). Stage 1, control and Gaussian RL rows are the C4 runs (same inits, budget, batches, lr and selection).
+
+| Model (3 seeds, mean ± std) | SfM val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|
+| Stage 1 | 83.04 ± 0.01 | 42.27 ± 1.17 | 19.41 ± 0.70 | 59.87 ± 0.95 | 32.94 ± 0.70 |
+| + continued metric learning (FastAP) | 82.95 ± 0.34 | 42.51 ± 1.16 | 20.09 ± 2.46 | 60.25 ± 0.85 | 33.26 ± 0.54 |
+| + Gaussian RL (C4) | 83.10 ± 0.11 | 42.53 ± 1.39 | 20.34 ± 1.82 | 59.80 ± 0.67 | 33.11 ± 0.66 |
+| + PL RL τ 0.02 | 84.14 ± 0.22 | **43.04 ± 0.45** | **21.36 ± 1.34** | 60.77 ± 1.54 | 33.60 ± 1.17 |
+| + PL RL τ 0.01 | **84.24 ± 0.13** | 43.01 ± 0.77 | 20.91 ± 1.11 | **61.33 ± 1.54** | **33.61 ± 1.01** |
+
+Paired differences (same Stage 1 seed), mean ± std; per-seed values in brackets (seeds 42 / 1 / 2):
+
+| Comparison | SfM val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|
+| PL τ 0.01 − Stage 1 | +1.21 ± 0.12 | +0.74 ± 0.48 (+0.47 / +0.46 / +1.29) | +1.50 ± 1.33 | +1.46 ± 0.70 (+1.46 / +2.16 / +0.76) | +0.67 ± 1.24 |
+| PL τ 0.01 − control | +1.29 ± 0.21 | +0.50 ± 1.27 (+1.68 / +0.66 / −0.83) | +0.82 ± 1.97 | +1.08 ± 0.77 (+1.15 / +1.82 / +0.27) | +0.35 ± 1.35 |
+| PL τ 0.02 − Stage 1 | +1.10 ± 0.22 | +0.77 ± 0.73 | +1.95 ± 1.76 | +0.90 ± 1.05 | +0.66 ± 1.62 |
+| PL τ 0.02 − control | +1.19 ± 0.22 | +0.53 ± 1.33 | +1.27 ± 2.50 | +0.52 ± 1.07 | +0.34 ± 1.64 |
+
+- **First reproducible gain from reward tuning.** On SfM validation PL RL beats both Stage 1 and the control by +1.1 to +1.3 in every seed (the selection metric, so partly optimistic). On the benchmarks, PL τ 0.01 improves on Stage 1 in all three seeds for ROxford Medium, ROxford Hard and RParis Medium; RParis Hard is +0.67 on average with one seed at −0.34.
+- **Against the matched control** the gains are positive on average for every column (ROxf M +0.50, RPar M +1.08) but not yet in every seed: the control has a ±1–2.5 seed spread on 70-query benchmarks. **The pre-registered success criterion (≥ +1.0 on both Medium protocols vs the strongest control, same sign in every seed, no Hard loss) is not met yet**; RParis Medium meets it, ROxford Medium does not.
+- The anchored PL run (τ 0.02, consistency 5,000, job 4525126) stayed at the init (83.07): the gain needs the model free to move.
+- Both τ values were run and are reported; τ 0.01 is slightly better on val and more consistent on the benchmarks.
+- Still open: the memory-bank differentiable control (plan 3.4), more seeds to shrink the spread, R1M distractors.
+- Records: `results/runs/cmp_pl_t{0.02,0.01}_cw0_seed{42,1,2}/` (configs, git diffs, init hashes, final_eval.json); checkpoints `$HPCVAULT/runs/cmp_pl_*`.
+
 ### E2. Plackett–Luce pilot, seed-42 init (jobs 4525123–4525126, ~28 min each; smoke 4525122 passed)
 Same budget, batches, learning rate and selection as the C4 RL arm; init SfM val mAP 83.03. R = 64 rankings, k = 100, bank 4,096.
 
@@ -29,7 +56,7 @@ Same budget, batches, learning rate and selection as the C4 RL arm; init SfM val
 | τ 0.02, no anchor | **84.23** / 83.60 | **+1.20** | 0.92 / 0.95 |
 | τ 0.01, no anchor | 83.87 / 83.79 | +0.84 | 0.93 / 0.95 |
 | τ 0.05, no anchor | 81.48 / 81.15 | −1.55 | 0.87 / 0.95 |
-| τ 0.02, consistency 5,000 | (running) | | |
+| τ 0.02, consistency 5,000 | 83.05 / 83.07 | +0.04 | (anchor holds it at init, as in Phases 1–2) |
 
 For reference (C3/C4): continued metric learning 82.96 (seed 42), Gaussian RL 83.25 at best; nothing in Phases 1–2 exceeded +0.22.
 - **First clear validation gain from reward tuning, without any anchor.** Every Gaussian-policy run without an anchor got worse (D3: 79.22).

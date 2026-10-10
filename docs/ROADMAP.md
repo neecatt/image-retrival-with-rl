@@ -61,6 +61,8 @@ Status: plan written 2026-10-10 in [RL_RESEARCH_PLAN.md](RL_RESEARCH_PLAN.md) af
 
 Update 2026-10-10: Phase 1 (binary reward, multi-sample estimator) and Phase 2 (verification-graded nDCG reward) both failed their validation gates (PROGRESS D2–D3, D7–D8). The Gaussian embedding policy either stays at the Stage 1 anchor or degrades, and the graded differentiable control degrades too. Next: a hard-positive validation metric, then Phase 3 (Plackett–Luce ranking policy, where the log-probability is an exact differentiable function of the similarity scores).
 
+Update 2026-10-10 evening: Phase 3 (Plackett–Luce ranking policy) gives the first reproducible reward-tuning gain (PROGRESS E3): over 3 seeds +1.2 SfM val vs Stage 1 and control in every seed; vs the matched FastAP control ROxford M/H +0.50 / +0.82 and RParis M/H +1.08 / +0.35. Not yet significant on ROxford; next are a memory-bank differentiable control and more seeds.
+
 - Investigate whether a gallery representative of difficult large-scale retrieval improves task-reward tuning. Candidate mechanisms include hard-negative selection, memory freshness, and reward/baseline variance reduction.
 - Choose one mechanism supported by diagnostics and prior-work analysis. Existing memory banks and consistency regularization alone are not new contributions.
 - Run targeted ablations, including a consistency-only/zero-policy-weight control where useful, to isolate the source of improvements.
