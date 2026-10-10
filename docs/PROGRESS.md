@@ -21,6 +21,23 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 - **CPU checks:** log-probabilities match a brute-force sequential computation to 1e-10, and all top-2 lists sum to probability 1. Gumbel top-k frequencies match PL (first place 0.580 vs 0.579; a specific pair 0.295 vs 0.293). On an enumerable toy problem (6 items, k = 4) the averaged estimate has cosine **0.9999** with the exact gradient of expected AP@k from finite differences. For comparison, the Gaussian policy reached 0.69–0.89 (D1).
 - **Pilot (submitted 18:30):** same budget, batches, init (seed-42 Stage 1), learning rate (2e-6) and selection as the C4 RL arm, so the 3-seed C4 control is reused. Grid: τ ∈ {0.01, 0.02, 0.05} without anchor, plus τ = 0.02 with consistency 5,000. Smoke 4525046 failed because YAML reads `2e-6` as a string (learning rate now written `0.000002`); resubmitted as smoke 4525122 (a100mig) and pilots 4525123–26 (rtxpro6k); every full GPU partition is booked until ~01:15–01:30.
 
+### E2. Plackett–Luce pilot, seed-42 init (jobs 4525123–4525126, ~28 min each; smoke 4525122 passed)
+Same budget, batches, learning rate and selection as the C4 RL arm; init SfM val mAP 83.03. R = 64 rankings, k = 100, bank 4,096.
+
+| Run | SfM val ep 1 / ep 2 | Δ best vs init | train reward sampled / mean ranking |
+|---|---|---|---|
+| τ 0.02, no anchor | **84.23** / 83.60 | **+1.20** | 0.92 / 0.95 |
+| τ 0.01, no anchor | 83.87 / 83.79 | +0.84 | 0.93 / 0.95 |
+| τ 0.05, no anchor | 81.48 / 81.15 | −1.55 | 0.87 / 0.95 |
+| τ 0.02, consistency 5,000 | (running) | | |
+
+For reference (C3/C4): continued metric learning 82.96 (seed 42), Gaussian RL 83.25 at best; nothing in Phases 1–2 exceeded +0.22.
+- **First clear validation gain from reward tuning, without any anchor.** Every Gaussian-policy run without an anchor got worse (D3: 79.22).
+- Too much randomness (τ 0.05) hurts. τ 0.01–0.02 keeps the sampled rankings close to the greedy one (reward 0.92–0.93 vs 0.95).
+- Epoch 2 is lower than epoch 1 at τ 0.02. Selection on validation takes epoch 1; a shorter schedule or lr decay may help later.
+- **Caveats:** one seed, validation only. The control in C4 has no memory bank, so a memory-bank differentiable control (e.g. a softmax/contrastive or Smooth-AP loss on the same bank) is still needed before claiming that RL, rather than the bank, causes the gain.
+- **Next (submitted):** 3 seeds × τ ∈ {0.02, 0.01} with final ROxford/RParis evaluation, jobs 4525409–4525414 (`results/runs/cmp_pl_t*_cw0_seed*`).
+
 ## 2026-10-10: Phase 1 of the RL research plan ([RL_RESEARCH_PLAN.md](RL_RESEARCH_PLAN.md))
 
 ### D1. Multi-sample estimator audit (CPU, `scripts/audit_multisample.py`)
