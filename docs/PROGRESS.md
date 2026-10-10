@@ -21,6 +21,24 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 - **CPU checks:** log-probabilities match a brute-force sequential computation to 1e-10, and all top-2 lists sum to probability 1. Gumbel top-k frequencies match PL (first place 0.580 vs 0.579; a specific pair 0.295 vs 0.293). On an enumerable toy problem (6 items, k = 4) the averaged estimate has cosine **0.9999** with the exact gradient of expected AP@k from finite differences. For comparison, the Gaussian policy reached 0.69–0.89 (D1).
 - **Pilot (submitted 18:30):** same budget, batches, init (seed-42 Stage 1), learning rate (2e-6) and selection as the C4 RL arm, so the 3-seed C4 control is reused. Grid: τ ∈ {0.01, 0.02, 0.05} without anchor, plus τ = 0.02 with consistency 5,000. Smoke 4525046 failed because YAML reads `2e-6` as a string (learning rate now written `0.000002`); resubmitted as smoke 4525122 (a100mig) and pilots 4525123–26 (rtxpro6k); every full GPU partition is booked until ~01:15–01:30.
 
+### E5. Softmax control vs PL, 3 seeds with final evaluation (jobs 4526124–4526126, 32–35 min each)
+Same inits, batches, bank, lr, budget and selection as E3.
+
+| Model (3 seeds, mean ± std) | SfM val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|
+| Stage 1 | 83.04 ± 0.01 | 42.27 ± 1.17 | 19.41 ± 0.70 | 59.87 ± 0.95 | 32.94 ± 0.70 |
+| + FastAP control (C4) | 82.95 ± 0.34 | 42.51 ± 1.16 | 20.09 ± 2.46 | 60.25 ± 0.85 | 33.26 ± 0.54 |
+| + softmax control, bank, τ 0.02 | **84.52 ± 0.20** | 42.64 ± 1.45 | 19.51 ± 3.41 | **61.51 ± 1.27** | **34.01 ± 0.60** |
+| + PL RL τ 0.01 (E3) | 84.24 ± 0.13 | 43.01 ± 0.77 | 20.91 ± 1.11 | 61.33 ± 1.54 | 33.61 ± 1.01 |
+| + PL RL τ 0.02 (E3) | 84.14 ± 0.22 | **43.04 ± 0.45** | **21.36 ± 1.34** | 60.77 ± 1.54 | 33.60 ± 1.17 |
+
+Paired PL τ 0.01 − softmax control: SfM val −0.27 ± 0.13, ROxf M +0.37 ± 1.19, ROxf H +1.40 ± 2.44, RPar M −0.17 ± 0.47, RPar H −0.39 ± 1.03 (per seed, ROxf M +1.73 / −0.15 / −0.47).
+
+- **The PL gain in E3 is not an RL effect.** The matched differentiable control on the same bank and batches is as good: better on SfM val in every seed and on RParis on average, worse on ROxford on average (driven by seed 42, which has a weak ROxford control run). No column differs beyond seed noise.
+- **Useful by-product:** the bank + all-vs-all listwise objective is a stronger fine-tuning step than FastAP continuation (+1.5 SfM val, +1.6 RPar M, +1.1 RPar H over Stage 1, same sign in all seeds; ROxford unchanged within noise). This is the cross-batch-memory effect known from XBM (Wang et al., CVPR 2020), not a new contribution.
+- **Consequence for the RL claim:** with binary AP as reward, a PL policy and its maximum-likelihood counterpart are interchangeable. RL can only add something with a reward the control cannot optimise directly (graded verification relevance, or top-k-only measures).
+- Stage 1 seed 3 (job 4525720) was killed by the host-RAM limit at epoch 6 (MaxRSS 86.7 GB of 92 GB, 16 loader workers). Resumed from its last checkpoint with 8 workers.
+
 ### E4. Memory-bank control and extra seeds (submitted 2026-10-10 ~20:45)
 - **Control:** `training.stage2.policy=softmax_control` (`training/pl_policy.py`), a multi-positive softmax cross-entropy (SupCon) over the same scores q·g/τ, the same all-vs-all batches, the same 4,096 bank of means, lr, budget and selection, run in the same trainer. It is the maximum-likelihood counterpart of the PL policy, so a PL gain over it cannot come from the bank, τ or the batch layout. CPU toy: both modes learn (greedy AP 0.56 / 0.55 after 30 steps).
 - **Control τ grid (seed 42; same tuning effort as the PL τ grid):** τ 0.01 / 0.02 / 0.05, jobs 4525724–4525726. The best τ on val then gets 5 seeds with final evaluation.
