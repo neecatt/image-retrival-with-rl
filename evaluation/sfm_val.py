@@ -55,8 +55,8 @@ def leave_one_out_map(embeddings: torch.Tensor, labels: torch.Tensor, chunk: int
 
 def graded_leave_one_out(embeddings: torch.Tensor, grades: dict, ks=(10, 100), chunk: int = 512) -> Dict[str, float]:
     """Graded nDCG@k with each val image as query against all others (self excluded).
-    grades: {(i, j): grade} from geometric verification; missing pairs are grade 0
-    (val verifies every same-landmark pair, so only other landmarks are missing)."""
+    grades: {(i, j): relevance level 1-4} for same-landmark pairs (data.graded_lists.load_oracle);
+    missing pairs are level 0 (val verifies every same-landmark pair, so only other landmarks are missing)."""
     from losses.graded import ndcg_at_k
     n = embeddings.size(0)
     G = torch.zeros(n, n, dtype=torch.float32, device=embeddings.device)
