@@ -13,6 +13,14 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 | P5 | Policy gradient norm is 100–300 vs 0.06–0.08 for the consistency term; `gradient_clip: 1.0` clips 90–100% of steps | The consistency regulariser has no practical effect; updates are clipped to unit norm every step | Measured (B2). Addressed together with P2 |
 | P6 | Gallery embeddings are sampled but receive no policy gradient; memory-bank entries come from older parameters | The objective is "query-only, given a noisy gallery", not full expected AP | Acceptable if stated explicitly in the paper; not changed |
 
+## 2026-10-10: Phase 3, rankings as actions
+
+### E1. Plackett–Luce ranking policy (implementation and CPU check)
+- **Why:** Phases 1–2 used a Gaussian policy on embeddings. Its log-density is a proxy (κ μ·a), and its gradient only comes through random perturbations of a 512-d vector. In every run the model either stayed at the anchor or got worse.
+- **What:** `training/pl_policy.py`. The action is a top-k ranking (k = 100) of the batch plus the 4,096-entry bank of means, sampled from a Plackett–Luce model over the scores q·g/τ with the Gumbel top-k trick. The log-probability is exact and differentiable in the scores, so gradients reach both query and gallery embeddings. Every batch item is a query against all others. R = 64 sampled rankings per query with leave-one-out baselines; AP@k reward with positives outside the list counted as missed.
+- **CPU checks:** log-probabilities match a brute-force sequential computation to 1e-10, and all top-2 lists sum to probability 1. Gumbel top-k frequencies match PL (first place 0.580 vs 0.579; a specific pair 0.295 vs 0.293). On an enumerable toy problem (6 items, k = 4) the averaged estimate has cosine **0.9999** with the exact gradient of expected AP@k from finite differences. For comparison, the Gaussian policy reached 0.69–0.89 (D1).
+- **Pilot (submitted 18:30):** same budget, batches, init (seed-42 Stage 1), learning rate (2e-6) and selection as the C4 RL arm, so the 3-seed C4 control is reused. Grid: τ ∈ {0.01, 0.02, 0.05} without anchor, plus τ = 0.02 with consistency 5,000. Smoke 4525046 runs on a100mig now. Pilots 4525047–50 are on rtxpro6k; every full GPU partition is booked until ~01:15–01:30.
+
 ## 2026-10-10: Phase 1 of the RL research plan ([RL_RESEARCH_PLAN.md](RL_RESEARCH_PLAN.md))
 
 ### D1. Multi-sample estimator audit (CPU, `scripts/audit_multisample.py`)
