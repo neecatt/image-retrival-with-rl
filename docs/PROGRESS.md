@@ -44,7 +44,7 @@ Batch 32, one pass over SfM-120k (2 × 1,432 batches), σ 0.05, lr 2e-6, no clip
 
 Reference points: control (continued FastAP) 82.96; old RL estimator 83.25 (one epoch, one seed).
 - The new estimator gives a much steadier signal (policy grad norm 6–15 instead of 100–300; >99.9% of queries carry signal), but the model **barely moves**: a consistency MSE of ~2e-6 per dimension corresponds to cosine ≈ 0.999 between new and Stage 1 embeddings. With a binary AP reward on a model that FastAP already trained, there is little left to gain.
-- Gate 1.5 (≥ control + 0.3 = 83.26) **not met**. Diagnostic follow-up with weak/no anchoring at S = 64 (jobs 4521747/4521748) checks whether the RL direction helps once the model is allowed to move.
+- Gate 1.5 (≥ control + 0.3 = 83.26) **not met**. Diagnostic follow-up with weak/no anchoring at S = 64 (jobs 4521748/4521749) checks whether the RL direction helps once the model is allowed to move.
 - Relevance-oracle pilot job 4521483 crashed on a degenerate MAGSAC fit (OpenCV assertion); fixed and resubmitted as 4521746.
 
 ## 2026-10-09/10: New Stage 1 baseline and matched comparison
