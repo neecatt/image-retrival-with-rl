@@ -42,11 +42,18 @@ def graded_policy_loss(q_mean, g_mean, gains, valid, sigma, S, k,
             sim = torch.cat([sim, sm[:, :, None, :].expand(-1, -1, S, -1)], -1)
             gn = torch.cat([gn, torch.zeros(B, S, S, sm.size(-1), device=gn.device)], -1)
         R = ndcg_at_k(sim, gn, k)                                       # (B,S,S)
+        # reward of the deterministic (mean) ranking, to see how far sampling moves it
+        sim0 = (q_mean.detach() @ g_mean.detach().t()).masked_fill(~valid, neg_inf)
+        gn0 = gains
+        if mem_emb is not None and mem_emb.numel() > 0:
+            sim0 = torch.cat([sim0, (q_mean.detach() @ mem_emb.t()).masked_fill(~mem_valid, neg_inf)], -1)
+            gn0 = torch.cat([gains, torch.zeros_like(sim0[:, N:])], -1)
+        r_mean = ndcg_at_k(sim0, gn0, k).mean().item()
         r_q, r_g = R.mean(2), R.mean(1)
         A_q = r_q - (r_q.sum(1, keepdim=True) - r_q) / (S - 1)
         A_g = r_g - (r_g.sum(1, keepdim=True) - r_g) / (S - 1)
     loss = -(A_q * q_logp.t()).mean() - (A_g * g_logp.sum(1)[None, :]).mean()
-    stats = {'reward': R.mean().item(), 'adv_q_abs': A_q.abs().mean().item(),
+    stats = {'reward': R.mean().item(), 'reward_mean_policy': r_mean, 'adv_q_abs': A_q.abs().mean().item(),
              'reward_std_within_query': R.flatten(1).std(1).mean().item()}
     return loss, stats
 

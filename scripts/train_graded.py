@@ -49,6 +49,8 @@ def main():
     ap.add_argument('--workers', type=int, default=8)
     ap.add_argument('--seed', type=int, default=42)
     ap.add_argument('--select', default='sfm_val_graded_ndcg@100')
+    ap.add_argument('--binary_train_grades', action='store_true',
+                    help='ablation: every verified same-landmark pair gets level 1 in training (val stays graded)')
     a = ap.parse_args()
     set_seed(a.seed)
     dev = torch.device('cuda')
@@ -60,6 +62,8 @@ def main():
                               train_transform=get_transforms(a.image_size, 'train', AUG),
                               val_transform=get_transforms(a.image_size, 'eval'))
     g_train, g_val = load_oracle(a.oracle_dir, 'train'), load_oracle(a.oracle_dir, 'val')
+    if a.binary_train_grades:
+        g_train = dict.fromkeys(g_train, 1)
     sampler = GradedListSampler(train.labels, g_train, a.queries_per_batch, a.candidates_per_query,
                                 a.batches_per_epoch, seed=a.seed)
     print(f"graded lists: {len(sampler.partners)} usable queries over {len(sampler.landmarks)} landmarks; "
