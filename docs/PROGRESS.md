@@ -13,6 +13,14 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 | P5 | Policy gradient norm is 100–300 vs 0.06–0.08 for the consistency term; `gradient_clip: 1.0` clips 90–100% of steps | The consistency regulariser has no practical effect; updates are clipped to unit norm every step | Measured (B2). Addressed together with P2 |
 | P6 | Gallery embeddings are sampled but receive no policy gradient; memory-bank entries come from older parameters | The objective is "query-only, given a noisy gallery", not full expected AP | Acceptable if stated explicitly in the paper; not changed |
 
+## 2026-10-11: RL tuning on top of the strongest differentiable model (Pinto et al. recipe)
+
+### R1. Pilot from the softmax-control checkpoint (submitted 2026-10-11 ~15:40, jobs 4533986–4533991)
+- **Why:** Susano Pinto et al. first train the best maximum-likelihood model, then reward-tune it on the task metric. We always started RL from Stage 1. The softmax control (E5) is our strongest model; it optimises the likelihood of each positive at first place, while AP rewards the whole ranking, so RL may improve the gap.
+- **Init:** `cmp_sm_t0.02_seed42` stage2_best (SfM val 84.59 on its own selection run; the init is re-measured at epoch 0 of each run). Same budget (2 × 1,432 batches), bank, batches and selection as E3/E5.
+- **Arms (equal tuning effort, 3 each):** PL RL τ 0.01 / 0.02 at lr 2e-6 and τ 0.01 at lr 1e-6; continued softmax control τ 0.02 / 0.01 at lr 2e-6 and τ 0.02 at lr 1e-6.
+- **Gate:** best RL arm > best control arm on SfM val by more than the E5 seed spread (≈ 0.3); then 5 seeds with final evaluation.
+
 ## 2026-10-11: Revised plan, Track A (verifier-in-the-loop RL)
 
 ### A0b. Same diagnostic on held-out SfM-120k val (job 4533274, a40, 65 min; all 6,403 val queries × top-20 = 128,060 pairs, 37 pairs/s with feature caching)
