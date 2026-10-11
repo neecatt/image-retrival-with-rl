@@ -15,6 +15,16 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 
 ## 2026-10-11: Revised plan, Track A (verifier-in-the-loop RL)
 
+### A0a. Stage 1 seeds 3 and 4 finished (jobs 4525721; 4525720 OOM at epoch 6, resumed as 4527173)
+
+| Stage 1 seed | SfM val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|
+| 3 | 82.94 | 43.80 | 18.78 | 57.76 | 31.38 |
+| 4 | 82.81 | 41.03 | 20.32 | 58.48 | 32.01 |
+| 5-seed mean ± std (42, 1, 2, 3, 4) | 82.97 ± 0.10 | 42.33 ± 1.29 | 19.46 ± 0.74 | 59.17 ± 1.20 | 32.44 ± 0.87 |
+
+- Resume after the OOM worked (one "Resuming" line, 8 loader workers, no further OOM). Checkpoints: `$HPCVAULT/runs/s1_b32_lr1e-5_seed{3,4}`.
+
 ### A0. Label-noise / exploration diagnostic (job 4527211, a40, 72 min incl. embedding 91,642 train images)
 Seed-42 Stage 1; 2,000 random SfM-120k train queries × top-20 = 40,000 retrieved pairs, all verified (ALIKED + LightGlue + MAGSAC). Output: `results/a0_label_noise/` (pairs, summary, contact sheets); train embeddings cached on `$HPCVAULT/runs/a0_label_noise/`.
 
