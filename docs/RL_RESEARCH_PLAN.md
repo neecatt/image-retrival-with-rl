@@ -24,6 +24,7 @@ Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
 - [x] A0 done (PROGRESS A0): verifier finds real label noise (17% of retrieved "negatives" are verified matches; contact sheets confirm), but the model has memorised SfM-120k train (97% of top-20 already positive), so only 0.5% of retrieved pairs are exploitable. Gate formally passed (condition 1), condition 2 not met. Track A needs an unseen pool (A0b)
 - [x] A0b done on val (PROGRESS A0b): unseen images give more retrieval errors (9.6% of top-20, 34% of queries) but the cluster labels are right about 94% of them; hidden matches stay ~0.5% of pairs, disagreement 3.6%. Gate: condition 1 barely met, condition 2 not met. Track A on SfM-120k is not promising; GLDv2 version reduces to exploration vs iterative re-mining (low prior). User chose (2026-10-11) the Pinto recipe next
 - [x] R1 done (PROGRESS R1): from the softmax-control model (84.59) every arm drifts down; best RL 84.26 vs best control 84.29. Gate not met; no seeds run
+- [x] B0 Track B headroom check (PROGRESS B0): shortlist recall@20 is 97% on the training pool, re-ranking changes the reward for 9% of queries. Track B not built on SfM-120k; the training pool is saturated
 - [ ] A1 verifier-in-the-loop RL infrastructure (pair cache, rollout rounds, PPO-clip + GRPO + KL)
 - [ ] A2 pilot vs static (C2) and iterative re-mining (C3) controls at equal verifier budget
 - [ ] A3 5 seeds with final evaluation; Track B (pipeline reward) if A passes; Track C upgrades for all arms
