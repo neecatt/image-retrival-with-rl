@@ -15,6 +15,20 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 
 ## 2026-10-11: Revised plan, Track A (verifier-in-the-loop RL)
 
+### A0b. Same diagnostic on held-out SfM-120k val (job 4533274, a40, 65 min; all 6,403 val queries × top-20 = 128,060 pairs, 37 pairs/s with feature caching)
+
+| | ranks 1–5 | 6–10 | 11–20 | all top-20 | (train, A0) |
+|---|---|---|---|---|---|
+| retrieved items labelled negative | 3.0% | 7.0% | 14.1% | 9.6% | 2.8% |
+| … of those, verified match (≥ 100 inliers) | 10.9% | 6.5% | 5.0% | 5.8% (13.7% at ≥ 25) | 17.3% |
+| retrieved positives with no support (< 25 inliers) | 1.8% | 2.8% | 4.5% | 3.3% | 3.1% |
+| hidden matches (negative label, ≥ 100 inliers) as share of all pairs | | | | 0.55% | 0.49% |
+| queries with at least one labelled negative in top-20 | | | | 34.1% | 9.8% |
+
+- **On unseen images the model makes more mistakes** (9.6% of the top-20 are other landmarks; a third of queries have at least one), **but the labels already describe almost all of them correctly**: 94% of retrieved negatives are true non-matches. Hidden matches stay at ~0.5% of retrieved pairs, the same as on train, and label/verifier disagreement is 3.6%.
+- **Gate (§4b):** condition 1 barely met (5.8% vs 5%), condition 2 not met (3.6% vs 10%).
+- **Conclusion:** within SfM-120k the verifier adds little information beyond the cluster labels, so verifier-in-the-loop RL on SfM-120k is not promising. On an unlabelled pool (GLDv2) the verifier would *be* the supervision, but then the competitor is iterative re-mining with the same verifier, and RL's only extra ingredient is exploration beyond the greedy top-k. After E5 the prior for that winning is low.
+
 ### A0a. Stage 1 seeds 3 and 4 finished (jobs 4525721; 4525720 OOM at epoch 6, resumed as 4527173)
 
 | Stage 1 seed | SfM val | ROxf M | ROxf H | RPar M | RPar H |

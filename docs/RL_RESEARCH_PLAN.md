@@ -22,7 +22,7 @@ Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
 
 **Revised path (§4b, 2026-10-11)**
 - [x] A0 done (PROGRESS A0): verifier finds real label noise (17% of retrieved "negatives" are verified matches; contact sheets confirm), but the model has memorised SfM-120k train (97% of top-20 already positive), so only 0.5% of retrieved pairs are exploitable. Gate formally passed (condition 1), condition 2 not met. Track A needs an unseen pool (A0b)
-- [ ] A0b same diagnostic on images the model has not trained on: SfM-120k val **submitted** (job 4533274, a40, all 6,403 val queries × top-20, est. start ~17:20); GLDv2 subset (needs download) after
+- [x] A0b done on val (PROGRESS A0b): unseen images give more retrieval errors (9.6% of top-20, 34% of queries) but the cluster labels are right about 94% of them; hidden matches stay ~0.5% of pairs, disagreement 3.6%. Gate: condition 1 barely met, condition 2 not met. Track A on SfM-120k is not promising; GLDv2 version reduces to exploration vs iterative re-mining (low prior). Decision on the next track pending with the user
 - [ ] A1 verifier-in-the-loop RL infrastructure (pair cache, rollout rounds, PPO-clip + GRPO + KL)
 - [ ] A2 pilot vs static (C2) and iterative re-mining (C3) controls at equal verifier budget
 - [ ] A3 5 seeds with final evaluation; Track B (pipeline reward) if A passes; Track C upgrades for all arms
