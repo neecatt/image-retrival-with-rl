@@ -31,8 +31,8 @@ Updated as work proceeds; evidence goes to [PROGRESS.md](PROGRESS.md).
 
 **Track G: move training to GLDv2-clean (decided 2026-10-11)**
 Reason: SfM-120k train is saturated for Stage 1 (A0, A0b, B0), so no reward computed on it leaves room for RL.
-- [ ] G1 Download GLDv2 train (500 tars, ~500 GB, md5-checked, packed on `$HPCVAULT/datasets/gldv2`) and metadata. Clean subset: 1,580,470 images over 81,313 landmarks (median 9 images per landmark); images stored at ≤ 800 px
-- [ ] G2 Preprocess (Slurm): extract only clean images, resize to long side 512, repack into ~100 shards + manifest; hold out ~1,500 landmarks (≥ 4 images, ≤ 30 images each) as validation, chosen by fixed seed
+- [x] G1 Download done 2026-10-11 (500/500 tars md5-verified, 498 GB apparent; metadata in `$HPCVAULT/datasets/gldv2/metadata`). Clean subset: 1,580,470 images over 81,313 landmarks (median 9 per landmark); images stored at ≤ 800 px. **Vault charges ~2× apparent size, so quota is now 1,217 / 1,049 GB soft (hard 2,097 GB)**; raw tars are re-downloadable (fetch_train.sh) and are candidates for removal after G2, with the user's approval
+- [ ] G2 Preprocess (Slurm): extract only clean images, resize to long side 512, repack into ~100 shards + manifest; hold out ~1,500 landmarks (≥ 4 images, ≤ 30 images each) as validation, chosen by fixed seed — job 4536631 submitted (a40, est. start ~02:30); script tested on 2 tars (3,133 images and 159 MB per shard, ~80 GB total)
 - [ ] G3 Data loader, staging and leave-one-out val for GLDv2; same PK sampler
 - [ ] G4 Stage 1 on GLDv2-clean (FastAP, as on SfM): pilot for lr/batch, then full run; evaluate ROxford/RParis at long side 1024
 - [ ] G5 Saturation check on the new training pool (A0-style top-20 statistics); gate: clearly below the 97% SfM-120k level
