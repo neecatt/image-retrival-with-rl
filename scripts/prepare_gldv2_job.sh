@@ -14,5 +14,6 @@ module load python/3.12-base
 source "$HOME/venvs/rl-env/bin/activate"
 cd "$SLURM_SUBMIT_DIR"
 export PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1
-echo "$SLURM_JOB_ID $(date -Is) $(git rev-parse HEAD) cpus=$(nproc)"
-python scripts/prepare_gldv2.py --workers "$(nproc)" "$@"
+NCPU="${SLURM_CPUS_ON_NODE:?}"   # nproc would honour OMP_NUM_THREADS=1
+echo "$SLURM_JOB_ID $(date -Is) $(git rev-parse HEAD) cpus=$NCPU"
+python scripts/prepare_gldv2.py --workers "$NCPU" "$@"
