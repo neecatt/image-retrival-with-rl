@@ -37,6 +37,11 @@ def _hash_to_path(h: str) -> str:
     return f"{h[-2:]}/{h[-4:-2]}/{h[-6:-4]}/{h}"
 
 
+def _gldv2_id_to_path(i: str) -> str:
+    """GLDv2 image id (16 hex chars) to its official relative path a/b/c/<id>.jpg."""
+    return f"{i[0]}/{i[1]}/{i[2]}/{i}.jpg"
+
+
 class SfM120kDataset(Dataset):
     """
     SfM-120k images with their cluster (landmark) ID as the class label.
@@ -81,11 +86,25 @@ class SfM120kDataset(Dataset):
         return image, self.labels[idx], idx
 
 
+def load_gldv2c(
+    root_dir: str,
+    train_transform: Optional[transforms.Compose] = None,
+    val_transform: Optional[transforms.Compose] = None,
+    seed: int = 42,
+) -> Tuple[SfM120kDataset, SfM120kDataset]:
+    """GLDv2-clean as packed by scripts/prepare_gldv2.py: <root>/gldv2c.pkl (SfM-120k keys,
+    landmark ids as clusters, held-out landmarks as val) and images under <root>/jpg/a/b/c/<id>.jpg."""
+    return load_sfm120k(root_dir, train_transform, val_transform, seed,
+                        pkl_name='gldv2c.pkl', path_fn=_gldv2_id_to_path)
+
+
 def load_sfm120k(
     root_dir: str,
     train_transform: Optional[transforms.Compose] = None,
     val_transform: Optional[transforms.Compose] = None,
     seed: int = 42,
+    pkl_name: str = 'retrieval-SfM-120k.pkl',
+    path_fn=_hash_to_path,
 ) -> Tuple[SfM120kDataset, SfM120kDataset]:
     """
     Load SfM-120k from disk.
@@ -107,7 +126,7 @@ def load_sfm120k(
     image_root = root / 'jpg'
     # Prefer partial pkl if you ran partial_extract_sfm120k.py (quota-limited extraction)
     partial_pkl = root / 'retrieval-SfM-120k-partial.pkl'
-    pkl_path = partial_pkl if partial_pkl.exists() else root / 'retrieval-SfM-120k.pkl'
+    pkl_path = partial_pkl if (partial_pkl.exists() and pkl_name == 'retrieval-SfM-120k.pkl') else root / pkl_name
 
     if not pkl_path.exists():
         raise FileNotFoundError(
@@ -132,7 +151,7 @@ def load_sfm120k(
         labels = []
         missing_count = 0
         for h, c in zip(hashes, clusters):
-            rel_path = _hash_to_path(h)
+            rel_path = path_fn(h)
             absolute_path = image_root / rel_path
             if absolute_path.exists():
                 paths.append(rel_path)

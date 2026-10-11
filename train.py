@@ -45,7 +45,7 @@ from training.trainer import StandardTrainer
 from training.rl_trainer import RLTrainer
 from evaluation.evaluator import RetrievalEvaluator
 from data.dataset import ImageRetrievalDataset, RevisitedDataset, get_transforms
-from data.dataset_sfm120k import load_sfm120k
+from data.dataset_sfm120k import load_sfm120k, load_gldv2c
 from data.dataloader import get_dataloaders
 from data.dataloader import BalancedBatchSampler
 from utils.helpers import set_seed, get_device, save_checkpoint, load_checkpoint, save_training_curves
@@ -363,18 +363,20 @@ def create_dataloaders(config, stage='stage1'):
         return {'train': train_loader, 'val': val_loader}
 
     # SfM-120k — proper training set for retrieval (separate from eval benchmarks)
-    sfm_names = [n for n in dataset_names if n == 'sfm120k']
+    # GLDv2-clean (scripts/prepare_gldv2.py) uses the same structure and leave-one-out val
+    sfm_names = [n for n in dataset_names if n in ('sfm120k', 'gldv2c')]
     if sfm_names:
-        sfm_root = root_dir_cfg / 'sfm120k'
+        sfm_root = root_dir_cfg / sfm_names[0]
+        loader_fn = load_gldv2c if sfm_names[0] == 'gldv2c' else load_sfm120k
 
-        train_ds, val_ds = load_sfm120k(
+        train_ds, val_ds = loader_fn(
             root_dir=str(sfm_root),
             train_transform=train_transform,
             val_transform=val_transform,
             seed=seed,
         )
 
-        print(f"\nSfM-120k: {len(train_ds)} train images, {len(val_ds)} val images")
+        print(f"\n{sfm_names[0]}: {len(train_ds)} train images, {len(val_ds)} val images")
 
         sampler = BalancedBatchSampler(
             labels=torch.tensor(train_ds.labels),
