@@ -1,5 +1,5 @@
 """
-Held-out checkpoint-selection metric on the SfM-120k validation split.
+Held-out checkpoint-selection metric on the SfM-120k (or GLDv2-clean) validation split.
 
 Every validation image is a query against all other validation images
 (the query itself is excluded); positives share its 3D-model cluster.
@@ -85,9 +85,9 @@ def evaluate_sfm_val(model, val_dataset, device, batch_size: int = 16, num_worke
     metrics = leave_one_out_map(emb, lab)
     if grades is not None:
         metrics.update(graded_leave_one_out(emb, grades))
-        print("  SfM-120k val graded: " + "  ".join(f"{k.split('_')[-1]}={100 * v:.2f}"
+        print("  val (leave-one-out) graded: " + "  ".join(f"{k.split('_')[-1]}={100 * v:.2f}"
                                                     for k, v in metrics.items() if 'graded' in k))
-    print(f"  SfM-120k val: mAP={100 * metrics['sfm_val_mAP']:.2f}  "
+    print(f"  val (leave-one-out): mAP={100 * metrics['sfm_val_mAP']:.2f}  "
           f"success@1={100 * metrics['sfm_val_success@1']:.2f}  "
           f"({metrics['sfm_val_queries']} queries)")
     return metrics
