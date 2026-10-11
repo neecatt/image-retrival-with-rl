@@ -11,11 +11,14 @@ from pathlib import Path
 
 SRC = Path(os.environ.get('DATASET_ARCHIVES', '/home/vault/b268dc/b268dc21/datasets'))
 HASH_RE = re.compile(r'^[0-9a-f]{32}$')
+GLD_RE = re.compile(r'^[0-9a-f]/[0-9a-f]/[0-9a-f]/[0-9a-f]{16}\.jpg$')
 # name -> (archives, metadata files, extra bytes needed estimate, flatten?)
 SPEC = {
     'roxford5k': (['oxbuild_images-v1.tgz'], ['roxford5k.pkl', 'gnd_roxford5k.pkl'], 3 << 30),
     'rparis6k':  (['paris_1-v1.tgz', 'paris_2-v1.tgz'], ['rparis6k.pkl', 'gnd_rparis6k.pkl'], 5 << 30),
     'sfm120k':   (['ims.tar.gz'], ['retrieval-SfM-120k.pkl'], 60 << 30),
+    # GLDv2-clean at long side 512 (scripts/prepare_gldv2.py), 500 uncompressed shards
+    'gldv2c':    ([f'shards/gldv2c_{n:03d}.tar' for n in range(500)], ['gldv2c.pkl'], 120 << 30),
 }
 
 def die(msg):
@@ -23,14 +26,18 @@ def die(msg):
 
 def extract(archive, jpg, name):
     n = 0
-    with tarfile.open(archive, 'r:gz') as tar:
+    with tarfile.open(archive, 'r:*') as tar:
         for m in tar:
             if m.isdir():
                 continue
             parts = [p for p in m.name.split('/') if p not in ('', '.')]
             if not m.isreg() or m.name.startswith('/') or '..' in parts or not parts:
                 die(f"unsafe member {m.name!r} in {archive}")
-            if name == 'sfm120k':
+            if name == 'gldv2c':
+                if not GLD_RE.match(m.name):
+                    die(f"unexpected gldv2c member {m.name!r}")
+                rel = Path(*parts)
+            elif name == 'sfm120k':
                 if len(parts) != 4 or not HASH_RE.match(parts[-1]):
                     die(f"unexpected sfm120k member {m.name!r}")
                 rel = Path(*parts)
@@ -58,7 +65,7 @@ def main():
     free_b, free_i = st.f_bavail * st.f_frsize, st.f_favail
     need_b = sum(SPEC[d][2] for d in a.datasets)
     print(f"TMPDIR={tmp} free={free_b>>30} GiB, {free_i} inodes; estimated need={need_b>>30} GiB")
-    if free_b < need_b or free_i < 400_000:
+    if free_b < need_b or free_i < 2_000_000:
         die("insufficient node-local space or inodes")
 
     root = Path(tmp) / 'data' / 'raw'
