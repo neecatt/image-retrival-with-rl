@@ -20,6 +20,20 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 - **Init:** `cmp_sm_t0.02_seed42` stage2_best (SfM val 84.59 on its own selection run; the init is re-measured at epoch 0 of each run). Same budget (2 × 1,432 batches), bank, batches and selection as E3/E5.
 - **Arms (equal tuning effort, 3 each):** PL RL τ 0.01 / 0.02 at lr 2e-6 and τ 0.01 at lr 1e-6; continued softmax control τ 0.02 / 0.01 at lr 2e-6 and τ 0.02 at lr 1e-6.
 - **Gate:** best RL arm > best control arm on SfM val by more than the E5 seed spread (≈ 0.3); then 5 seeds with final evaluation.
+- **Result (all six completed, 27–28 min each; init SfM val 84.59):**
+
+| Arm | Setting | ep 1 / ep 2 | best Δ vs init |
+|---|---|---|---|
+| PL RL | τ 0.01, lr 2e-6 | 84.06 / 84.10 | −0.49 |
+| PL RL | τ 0.02, lr 2e-6 | 84.23 / 83.72 | −0.36 |
+| PL RL | τ 0.01, lr 1e-6 | 84.23 / **84.26** | −0.33 |
+| softmax control | τ 0.02, lr 2e-6 | 84.28 / 83.95 | −0.31 |
+| softmax control | τ 0.01, lr 2e-6 | 84.18 / 83.95 | −0.41 |
+| softmax control | τ 0.02, lr 1e-6 | **84.29** / 84.05 | −0.30 |
+
+- **No arm improves on the init; best RL 84.26 vs best control 84.29.** Gate not met. A second pass of either objective from an already fine-tuned model drifts slightly down, by the same amount for RL and control, so with this data and reward the model is at a plateau.
+- The init's 84.59 was itself the best of two epochs of its own run, so part of the drop is regression from a selected peak; this applies to both arms equally.
+- **Conclusion:** the Pinto recipe (reward tuning after the best ML model) gives no gain here. With binary SfM-cluster AP as the reward, RL and its ML counterpart are interchangeable from Stage 1 (E5) and from the tuned model (R1).
 
 ## 2026-10-11: Revised plan, Track A (verifier-in-the-loop RL)
 
