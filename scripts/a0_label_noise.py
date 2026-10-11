@@ -56,15 +56,23 @@ def main():
     ap.add_argument('--resize', type=int, default=1024)
     ap.add_argument('--cpu_workers', type=int, default=24)
     ap.add_argument('--seed', type=int, default=0)
-    ap.add_argument('--emb_file', required=True, help='cache for train embeddings (keep on HPCVAULT)')
+    ap.add_argument('--emb_file', required=True, help='cache for split embeddings (keep on HPCVAULT)')
+    ap.add_argument('--split', choices=['train', 'val'], default='train',
+                    help='val: images the model never trained on (queries and gallery from val)')
+    ap.add_argument('--feature_cache', type=int, default=8000, help='ALIKED features kept on GPU (images)')
     a = ap.parse_args()
     dev = torch.device('cuda')
-    out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
+    out = Path(a.out) if a.split == 'train' else Path(a.out) / a.split
+    out.mkdir(parents=True, exist_ok=True)
 
     tf = get_transforms(a.image_size, 'eval')
-    train, _ = load_sfm120k(str(Path(a.data_root) / 'sfm120k'), train_transform=tf, val_transform=tf)
+    train, val = load_sfm120k(str(Path(a.data_root) / 'sfm120k'), train_transform=tf, val_transform=tf)
+    train = train if a.split == 'train' else val     # 'train' below means the chosen split
     labels = np.asarray(train.labels)
-    emb_f = Path(a.emb_file); emb_f.parent.mkdir(parents=True, exist_ok=True)
+    emb_f = Path(a.emb_file)
+    if a.split != 'train':
+        emb_f = emb_f.with_name(f'{emb_f.stem}_{a.split}.npy')
+    emb_f.parent.mkdir(parents=True, exist_ok=True)
     if emb_f.exists():
         emb = torch.from_numpy(np.load(emb_f)).to(dev)
     else:
@@ -87,13 +95,21 @@ def main():
     matcher = LightGlue(features='aliked').eval().to(dev)
     root = Path(train.image_root)
     rec_q, rec_n, rec_r, rec_s, rec_m, pending = [], [], [], [], [], []
+    feats = {}
+
+    def feat(i):   # features are extracted once per image (FIFO cache on GPU)
+        if i not in feats:
+            if len(feats) >= a.feature_cache:
+                feats.pop(next(iter(feats)))
+            feats[i] = extractor.extract(load_image(root / train.image_paths[i]).to(dev), resize=a.resize)
+        return feats[i]
     t0 = time.time()
     with Pool(a.cpu_workers) as pool, torch.no_grad():
         for n, qi in enumerate(queries):
-            fq = extractor.extract(load_image(root / train.image_paths[qi]).to(dev), resize=a.resize)
+            fq = feat(qi)
             jobs = []
             for r, nb in enumerate(top_idx[n].tolist()):
-                fn = extractor.extract(load_image(root / train.image_paths[nb]).to(dev), resize=a.resize)
+                fn = feat(nb)
                 m = rbd(matcher({'image0': fq, 'image1': fn}))['matches']
                 jobs.append((rbd(fq)['keypoints'][m[:, 0]].cpu().numpy(), rbd(fn)['keypoints'][m[:, 1]].cpu().numpy()))
                 rec_q.append(qi); rec_n.append(nb); rec_r.append(r); rec_s.append(float(top_sim[n, r])); rec_m.append(len(m))
@@ -112,7 +128,7 @@ def main():
         return float(mask.mean()) if mask.size else float('nan')
     neg, pos = ~same, same
     summary = {
-        'model': a.model, 'num_queries': len(queries), 'topk': a.topk, 'pairs': int(len(rq)),
+        'model': a.model, 'split': a.split, 'gallery_size': int(len(labels)), 'num_queries': len(queries), 'topk': a.topk, 'pairs': int(len(rq)),
         'retrieved_negative_frac': frac(neg),
         'neg_verified_ge25': frac(inliers[neg] >= 25), 'neg_verified_ge100': frac(inliers[neg] >= 100),
         'pos_unsupported_lt25': frac(inliers[pos] < 25),
