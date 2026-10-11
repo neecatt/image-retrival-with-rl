@@ -34,6 +34,20 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - **Split (seed 0):** train 1,546,857 images / 79,813 landmarks; val 21,285 images / 1,500 held-out landmarks (≥ 4 images each, at most 30 kept). No landmark is in both splits.
 - **Caveat:** GLDv2 may contain Oxford/Paris landmarks; standard practice, to be stated in any write-up.
 
+### G4. Stage 1 on GLDv2-clean: pilot (jobs 4536649–4536651, ~22 min each on rtxpro6k)
+From ImageNet, batch 128 (32 landmarks × 4), 512 px, FastAP, cosine schedule over 3 short epochs of 1,000 batches (384k images, ~25% of GLDv2-clean). Metric: leave-one-out mAP on the 21,285-image GLDv2 held-out val (1,500 landmarks).
+
+| lr | epoch 1 | epoch 2 | epoch 3 |
+|---|---|---|---|
+| 1e-5 | 40.44 | 42.41 | 43.21 |
+| 3e-5 | 42.68 | 45.07 | 46.97 |
+| **1e-4** | 40.67 | 43.87 | **48.45** |
+
+- **The new pool is far from saturated:** val mAP ~48 and success@1 ~87%, against 83 / 98.6% on SfM-120k. Rewards computed on GLDv2 should leave room to learn.
+- Staging 1.58M files takes ~250 s; 1,000 batches take ~4.5 min (one full epoch of ~12,100 batches ≈ 55 min).
+- **Memory:** peak 86.7 GB of the 92 GB per-GPU limit with 12 loader workers, the same peak as the SfM-120k jobs, so it is probably page cache filling to the cap. The full run keeps 12 workers and resumes from `stage1_last.pth` if killed.
+- **Full run submitted:** `g_s1_b128_lr1e-4_seed42`, job 4537099, lr 1e-4, 10 epochs (~10 h), time limit 24 h, final ROxford/RParis + GLDv2 val evaluation.
+
 ## 2026-10-11: RL tuning on top of the strongest differentiable model (Pinto et al. recipe)
 
 ### R1. Pilot from the softmax-control checkpoint (submitted 2026-10-11 ~15:40, jobs 4533986–4533991)
