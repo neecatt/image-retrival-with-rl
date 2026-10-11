@@ -25,6 +25,15 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - On unseen images there is more room (recall@20 90%, a third of queries affected), but training happens on the memorised pool.
 - **Decision: Track B is not built on SfM-120k.** Like A0/A0b, the limit is the training data, not the algorithm: Stage 1 has fitted SfM-120k train, so any reward computed there is near its ceiling. A reward-tuning gain needs a training pool the model cannot fit, e.g. GLDv2 (≈ 4M images, noisy labels; its "clean" subset was itself built by local-feature verification).
 
+## 2026-10-11: Track G, moving training to GLDv2-clean
+
+### G1–G2. Download and packing
+- **Why:** SfM-120k train is saturated for Stage 1 (A0, A0b, B0), so no reward computed on it leaves room for RL. GLDv2-clean is the standard modern training set for ROxford/RParis (DELG, CVNet, SuperGlobal).
+- **Download (G1):** all 500 official train tars md5-verified (498 GB apparent) plus metadata in `$HPCVAULT/datasets/gldv2` (`fetch_train.sh`, resumable). Images CC-BY (per-image attribution in `train_attribution.csv`), labels CC BY 4.0. Vault charges ~2× apparent size: quota now 1,374 / 1,049 GB soft (hard 2,097). The user decided to keep the raw tars until the GLDv2 work is finished.
+- **Packing (G2, job 4536648, a40, 22 min with 16 workers):** all 1,580,470 clean images found, 0 decode failures, resized to long side 512 (JPEG q90), 500 shards, 75 GB apparent, `$HPCVAULT/datasets/gldv2c`. A first attempt (4536631) used 1 worker because `nproc` honours `OMP_NUM_THREADS=1`; it was cancelled and the script now uses `SLURM_CPUS_ON_NODE`.
+- **Split (seed 0):** train 1,546,857 images / 79,813 landmarks; val 21,285 images / 1,500 held-out landmarks (≥ 4 images each, at most 30 kept). No landmark is in both splits.
+- **Caveat:** GLDv2 may contain Oxford/Paris landmarks; standard practice, to be stated in any write-up.
+
 ## 2026-10-11: RL tuning on top of the strongest differentiable model (Pinto et al. recipe)
 
 ### R1. Pilot from the softmax-control checkpoint (submitted 2026-10-11 ~15:40, jobs 4533986–4533991)
