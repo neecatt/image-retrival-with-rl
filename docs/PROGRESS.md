@@ -13,6 +13,18 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 | P5 | Policy gradient norm is 100–300 vs 0.06–0.08 for the consistency term; `gradient_clip: 1.0` clips 90–100% of steps | The consistency regulariser has no practical effect; updates are clipped to unit norm every step | Measured (B2). Addressed together with P2 |
 | P6 | Gallery embeddings are sampled but receive no policy gradient; memory-bank entries come from older parameters | The objective is "query-only, given a noisy gallery", not full expected AP | Acceptable if stated explicitly in the paper; not changed |
 
+### B0. Track B headroom check before building (CPU, 2026-10-11; `scripts/analysis/trackb_headroom.py` on the A0/A0b pairs)
+Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Measured on the same seed-42 Stage 1 shortlists as A0/A0b (binary SfM labels; AP@20 is low in absolute terms because clusters have many more than 20 positives).
+
+| Pool | recall@20 of positives | queries with recall@20 < 1 | AP@20 global → after re-ranking (T = 25) | queries whose AP changes with re-ranking |
+|---|---|---|---|---|
+| train (2,000 queries) | 97.2% | 9.8% | 12.29 → 12.41 | 8.9% |
+| val (6,403 queries) | 90.4% | 34.1% | 45.78 → 46.45 | 28.0% |
+
+- **On the training pool the shortlist is already saturated.** 97% of the top-20 slots that could hold positives do, and re-ranking changes the reward for only 9% of queries. The part of the Track B reward that the global model controls (getting verifiable positives into the shortlist) is almost constant on training data, so RL would get even less signal than with plain AP.
+- On unseen images there is more room (recall@20 90%, a third of queries affected), but training happens on the memorised pool.
+- **Decision: Track B is not built on SfM-120k.** Like A0/A0b, the limit is the training data, not the algorithm: Stage 1 has fitted SfM-120k train, so any reward computed there is near its ceiling. A reward-tuning gain needs a training pool the model cannot fit, e.g. GLDv2 (≈ 4M images, noisy labels; its "clean" subset was itself built by local-feature verification).
+
 ## 2026-10-11: RL tuning on top of the strongest differentiable model (Pinto et al. recipe)
 
 ### R1. Pilot from the softmax-control checkpoint (submitted 2026-10-11 ~15:40, jobs 4533986–4533991)
