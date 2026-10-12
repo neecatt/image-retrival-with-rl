@@ -20,6 +20,8 @@ cd "$SLURM_SUBMIT_DIR"
 export PYTHONUNBUFFERED=1 OMP_NUM_THREADS=8
 : "${HPCVAULT:?HPCVAULT must be set}"
 RUN="${1:?RUN_NAME}"; ARM="${2:?ARM ml|rl}"; INIT="${3:?INIT_CKPT}"; shift 3
+# INIT may be a glob (e.g. for a Stage 1 run that finishes after submission); resolve it now
+INIT=$(ls -t $INIT | head -1); [ -f "$INIT" ] || { echo "init checkpoint not found"; exit 2; }
 FINAL=0; OVR=()
 for x in "$@"; do if [ "$x" = "--final-eval" ]; then FINAL=1; else OVR+=("$x"); fi; done
 case "$ARM" in ml) STAGE=stage1 ;; rl) STAGE=stage2 ;; *) echo "ARM must be ml or rl"; exit 2 ;; esac
