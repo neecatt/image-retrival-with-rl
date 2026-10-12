@@ -34,6 +34,30 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - **Split (seed 0):** train 1,546,857 images / 79,813 landmarks; val 21,285 images / 1,500 held-out landmarks (≥ 4 images each, at most 30 kept). No landmark is in both splits.
 - **Caveat:** GLDv2 may contain Oxford/Paris landmarks; standard practice, to be stated in any write-up.
 
+### G7. GLDv2: PL RL vs controls, 3 seeds with final evaluation (jobs 4543826–4543834, 25–36 min each)
+Init: GLDv2 Stage 1 seeds 42 / 1 / 2 (seeds 1–2: jobs 4542597–98, 9 h 43 min each). Settings fixed from the seed-42 val pilot (G6b): PL RL and softmax at τ 0.05, lr 1e-6; FastAP continuation at lr 1e-5; batch 128, 512 px, 2 × 1,432 batches, bank 4,096, no anchor. Selection on GLDv2 val; benchmarks scored once on the selected checkpoint (official scoring, long side 1024).
+
+| Model (3 seeds, mean ± std) | GLDv2 val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|
+| GLDv2 Stage 1 | 63.02 ± 0.21 | 48.08 ± 2.36 | 24.46 ± 3.85 | 73.63 ± 1.24 | 54.45 ± 0.59 |
+| + FastAP continuation | 62.83 ± 0.19 | 48.54 ± 1.36 | 24.71 ± 1.80 | 73.74 ± 1.23 | 54.37 ± 1.30 |
+| + softmax control (bank) | 64.10 ± 0.03 | 47.27 ± 1.30 | 22.35 ± 3.45 | 73.23 ± 1.26 | 54.66 ± 1.40 |
+| **+ PL RL (AP reward)** | **64.74 ± 0.13** | **51.52 ± 0.84** | **27.03 ± 1.61** | **75.86 ± 1.19** | **56.81 ± 1.43** |
+
+Paired differences (same Stage 1 seed), mean ± std; per seed 42 / 1 / 2:
+
+| Comparison | GLDv2 val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|
+| PL − FastAP control | +1.91 ± 0.13 | **+2.98 ± 0.57** (+2.43 / +3.56 / +2.94) | +2.32 ± 1.44 (+0.70 / +2.79 / +3.47) | **+2.13 ± 0.38** (+2.19 / +2.47 / +1.72) | +2.44 ± 0.74 (+2.39 / +3.19 / +1.72) |
+| PL − softmax control | +0.64 ± 0.15 | **+4.25 ± 0.47** (+4.15 / +4.76 / +3.84) | +4.67 ± 2.57 | **+2.63 ± 0.42** (+2.52 / +2.28 / +3.10) | +2.15 ± 0.37 |
+| PL − Stage 1 | +1.72 ± 0.13 | +3.44 ± 1.58 | +2.56 ± 2.85 (−0.26 / +5.43 / +2.52) | +2.23 ± 0.63 | +2.35 ± 0.98 |
+| softmax − Stage 1 | +1.08 ± 0.22 | −0.81 ± 1.27 | −2.11 ± 0.46 | −0.40 ± 1.05 | +0.21 ± 1.09 |
+
+- **First demonstrated reward-tuning gain over matched controls.** Against both controls PL RL is ahead in every column and every seed. The pre-registered criterion (§5: ≥ +1.0 on ROxford Medium and RParis Medium vs the strongest matched control, same sign in every seed, no loss on Hard) is **met over 3 seeds**: +2.98 / +2.13 vs FastAP and +4.25 / +2.63 vs softmax, with Hard also positive in every seed.
+- **The softmax control improves GLDv2 val (+1.08) but not the benchmarks** (ROxf H −2.11 in every seed), while PL RL improves both. On saturated SfM-120k the two were indistinguishable (E5); on GLDv2 the expected-AP@100 reward transfers to ROxford/RParis and the first-place likelihood does not.
+- **Caveats:** 3 seeds; τ and lr chosen on seed-42 validation only (no test-set selection); one budget (≈ 0.24 of a GLDv2 epoch); single-scale evaluation without R1M distractors; GLDv2 may contain Oxford/Paris landmarks (affects all arms equally).
+- **Next:** seeds 3–4 (Stage 1 jobs 4549985, 4549989; dependent comparisons 4549986–88, 4549990–92), then ablations (τ, reward k, budget), R1M distractors, and a second backbone.
+
 ### G6b. RL vs controls on GLDv2, pilot 2 (jobs 4543381–4543388, 21–30 min each; init val 62.89)
 
 | Arm | Setting | ep 1 / ep 2 | best Δ vs init |

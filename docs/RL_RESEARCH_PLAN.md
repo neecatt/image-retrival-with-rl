@@ -37,7 +37,8 @@ Reason: SfM-120k train is saturated for Stage 1 (A0, A0b, B0), so no reward comp
 - [x] G4 GLDv2 Stage 1 seed 42 done (PROGRESS G4b): val 62.89; ROxf M/H 49.93 / 27.15, RPar M/H 72.27 / 53.79 (vs 42.33 / 19.46 / 59.17 / 32.44 for SfM Stage 1). Seeds 1–2 submitted
 - [x] G5 Saturation check passed (PROGRESS G5): recall@20 47% and success@1 77% on the GLDv2 train pool (SfM: 97% / 99%); label/verifier disagreement 11.4%
 - [x] G6 pilots done (PROGRESS G6, G6b): at lr 1e-6 PL RL 64.61 vs softmax 64.13 vs FastAP 62.75 (init 62.89); PL ahead in every matched setting. **Gate met**
-- [ ] G7 3 seeds with final evaluation (PL, softmax, FastAP; jobs 4543826–34), then seeds 3–4 if the signs hold
+- [x] G7 3 seeds done (PROGRESS G7): **§5 success criterion met over 3 seeds.** PL RL vs FastAP control ROxf M/H +2.98 / +2.32, RPar M/H +2.13 / +2.44; vs softmax control +4.25 / +4.67 / +2.63 / +2.15; positive in every seed and column
+- [ ] G8 Seeds 3–4 (Stage 1 4549985 / 4549989, comparisons 4549986–88 / 4549990–92); then ablations (τ, k, budget), R1M distractors, second backbone
 - Caveat to report: GLDv2 may contain Oxford/Paris landmarks; training on GLDv2-clean for ROxford/RParis is standard practice (DELG, CVNet, SuperGlobal) but must be stated
 
 **Later**
