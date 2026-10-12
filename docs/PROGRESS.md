@@ -34,6 +34,25 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - **Split (seed 0):** train 1,546,857 images / 79,813 landmarks; val 21,285 images / 1,500 held-out landmarks (≥ 4 images each, at most 30 kept). No landmark is in both splits.
 - **Caveat:** GLDv2 may contain Oxford/Paris landmarks; standard practice, to be stated in any write-up.
 
+### G4b. GLDv2 Stage 1 full run, seed 42 (job 4537099, 9 h 24 min on one RTX PRO 6000)
+lr 1e-4, batch 128, 512 px, FastAP, cosine over 10 epochs (~12,100 batches each, ~55 min per epoch).
+
+| epoch | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| GLDv2 val mAP | 49.11 | 52.09 | 53.24 | 55.10 | 56.41 | 57.79 | 59.57 | 61.09 | 62.33 | **62.89** |
+
+Final evaluation of the epoch-10 checkpoint (official scoring):
+
+| Model | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|
+| SfM-120k Stage 1 (5-seed mean, A0a) | 42.33 | 19.46 | 59.17 | 32.44 |
+| **GLDv2-clean Stage 1, seed 42** (long side 1024) | **49.93** | **27.15** | **72.27** | **53.79** |
+| same, shorter side 1024 | 42.86 | 22.66 | 71.63 | 52.96 |
+
+- **Training on GLDv2-clean gives a much stronger starting model:** +7.6 / +7.7 on ROxford and +13.1 / +21.4 on RParis Medium / Hard over the SfM-120k Stage 1. Val mAP was still rising at epoch 10 (+0.56 in the last epoch), so a longer schedule would likely help further.
+- Peak memory 82.6 GiB of 92 with 12 workers; no OOM.
+- **Next:** G5 saturation check (job 4542593: 2,000 train queries × top-20 against the full 1.55M train pool, with verification). Seeds 1 and 2 of the same recipe submitted (24 h limit each).
+
 ### G4. Stage 1 on GLDv2-clean: pilot (jobs 4536649–4536651, ~22 min each on rtxpro6k)
 From ImageNet, batch 128 (32 landmarks × 4), 512 px, FastAP, cosine schedule over 3 short epochs of 1,000 batches (384k images, ~25% of GLDv2-clean). Metric: leave-one-out mAP on the 21,285-image GLDv2 held-out val (1,500 landmarks).
 
