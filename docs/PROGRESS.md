@@ -34,6 +34,23 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - **Split (seed 0):** train 1,546,857 images / 79,813 landmarks; val 21,285 images / 1,500 held-out landmarks (≥ 4 images each, at most 30 kept). No landmark is in both splits.
 - **Caveat:** GLDv2 may contain Oxford/Paris landmarks; standard practice, to be stated in any write-up.
 
+### G5. Saturation check on the GLDv2 training pool (job 4542593, 53 min; embedding 1.55M images took 36 min)
+Seed-42 GLDv2 Stage 1; 2,000 random train queries, top-20 against the full 1,546,857-image train pool; all 40,000 pairs verified (ALIKED + LightGlue + MAGSAC at 512 px).
+
+| | SfM-120k train (A0) | **GLDv2-clean train** |
+|---|---|---|
+| top-20 items with the query's label | 97.2% | **38.3%** |
+| recall@20 of positives (of min(npos, 20)) | 97.2% | **47.1%** |
+| success@1 | 99.3% | **77.3%** |
+| queries with recall@20 < 1 | 9.8% | **87.6%** |
+| labelled positives with no geometric support (< 25 inliers) | 3.1% | 28.6% |
+| labelled negatives verified as matches (≥ 100 inliers), share of negatives | 17.3% | 0.8% |
+| label / verifier disagreement, all pairs | 3.5% | **11.4%** |
+
+- **Gate passed by a wide margin: the GLDv2 training pool is not saturated.** Recall@20 is 47% instead of 97%, and almost 9 in 10 queries still miss positives in their top-20, so rewards computed on training batches have real headroom.
+- **Labels and verifier disagree more (11.4%, the A0 gate threshold was 10%),** but mostly the other way round from SfM: 29% of same-landmark pairs in the top-20 have no geometric overlap (median 66 inliers for retrieved positives; 40% have ≥ 100). GLDv2 landmarks include interiors, details and distant views of the same place. Hidden matches among negatives are rare (0.8%).
+- **Implication:** RL vs controls can now be tested where the training signal is not exhausted. A graded or verification-aware reward has more to work with than on SfM-120k.
+
 ### G4b. GLDv2 Stage 1 full run, seed 42 (job 4537099, 9 h 24 min on one RTX PRO 6000)
 lr 1e-4, batch 128, 512 px, FastAP, cosine over 10 epochs (~12,100 batches each, ~55 min per epoch).
 
