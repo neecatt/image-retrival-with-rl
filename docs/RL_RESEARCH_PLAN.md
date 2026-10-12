@@ -34,8 +34,8 @@ Reason: SfM-120k train is saturated for Stage 1 (A0, A0b, B0), so no reward comp
 - [x] G1 Download done 2026-10-11 (500/500 tars md5-verified, 498 GB apparent; metadata in `$HPCVAULT/datasets/gldv2/metadata`). Clean subset: 1,580,470 images over 81,313 landmarks (median 9 per landmark); images stored at ≤ 800 px. **Vault charges ~2× apparent size, so quota is now 1,217 / 1,049 GB soft (hard 2,097 GB)**; raw tars are re-downloadable (fetch_train.sh) and are candidates for removal after G2, with the user's approval
 - [x] G2 Packing done (PROGRESS G1–G2): 1,580,470 images, 0 failures, 75 GB; train 1,546,857 / 79,813 landmarks, val 21,285 / 1,500 landmarks
 - [x] G3 Loader (`load_gldv2c`), staging (`stage_datasets.py gldv2c`), `dataset.name=gldv2c` in train.py, GLDv2 val in final evaluation; tested on 2 shards
-- [ ] G4 Stage 1 on GLDv2-clean: pilot done (PROGRESS G4; lr 1e-4 best, val mAP 48.45 after 25% of an epoch, far from saturated). Full run seed 42 submitted (job 4537099, 10 epochs ≈ 10 h)
-- [ ] G5 Saturation check on the new training pool (A0-style top-20 statistics); gate: clearly below the 97% SfM-120k level
+- [x] G4 GLDv2 Stage 1 seed 42 done (PROGRESS G4b): val 62.89; ROxf M/H 49.93 / 27.15, RPar M/H 72.27 / 53.79 (vs 42.33 / 19.46 / 59.17 / 32.44 for SfM Stage 1). Seeds 1–2 submitted
+- [ ] G5 Saturation check on the new training pool (A0-style top-20 statistics); gate: clearly below the 97% SfM-120k level — submitted (job 4542593)
 - [ ] G6 RL (PL) vs softmax and FastAP controls from the GLDv2 Stage 1, then seeds
 - Caveat to report: GLDv2 may contain Oxford/Paris landmarks; training on GLDv2-clean for ROxford/RParis is standard practice (DELG, CVNet, SuperGlobal) but must be stated
 
