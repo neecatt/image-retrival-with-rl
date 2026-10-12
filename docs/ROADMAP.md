@@ -63,6 +63,8 @@ Update 2026-10-10: Phase 1 (binary reward, multi-sample estimator) and Phase 2 (
 
 Update 2026-10-10 evening: Phase 3 (Plackett–Luce ranking policy) gives the first reproducible reward-tuning gain (PROGRESS E3): over 3 seeds +1.2 SfM val vs Stage 1 and control in every seed; vs the matched FastAP control ROxford M/H +0.50 / +0.82 and RParis M/H +1.08 / +0.35. Not yet significant on ROxford; next are a memory-bank differentiable control and more seeds.
 
+Update 2026-10-12: moving training to GLDv2-clean (SfM-120k train was saturated) gives a much stronger Stage 1 (ROxf M 48.1, RPar M 73.6 over 3 seeds) and the **first demonstrated reward-tuning gain**: PL RL with an AP@100 reward beats matched FastAP and softmax controls in every seed and protocol (vs FastAP: ROxf M/H +2.98 / +2.32, RPar M/H +2.13 / +2.44; PROGRESS G7). Seeds 3–4 running.
+
 - Investigate whether a gallery representative of difficult large-scale retrieval improves task-reward tuning. Candidate mechanisms include hard-negative selection, memory freshness, and reward/baseline variance reduction.
 - Choose one mechanism supported by diagnostics and prior-work analysis. Existing memory banks and consistency regularization alone are not new contributions.
 - Run targeted ablations, including a consistency-only/zero-policy-weight control where useful, to isolate the source of improvements.
