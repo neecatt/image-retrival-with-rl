@@ -34,6 +34,25 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - **Split (seed 0):** train 1,546,857 images / 79,813 landmarks; val 21,285 images / 1,500 held-out landmarks (≥ 4 images each, at most 30 kept). No landmark is in both splits.
 - **Caveat:** GLDv2 may contain Oxford/Paris landmarks; standard practice, to be stated in any write-up.
 
+### G6b. RL vs controls on GLDv2, pilot 2 (jobs 4543381–4543388, 21–30 min each; init val 62.89)
+
+| Arm | Setting | ep 1 / ep 2 | best Δ vs init |
+|---|---|---|---|
+| PL RL | τ 0.02, lr 1e-6 | 64.38 / 64.42 | +1.53 |
+| PL RL | τ 0.02, lr 3e-7 | 64.51 / 64.30 | +1.62 |
+| PL RL | τ 0.05, lr 1e-6 | **64.61** / 64.53 | **+1.72** |
+| softmax control | τ 0.02, lr 1e-6 | 63.25 / 61.64 | +0.36 |
+| softmax control | τ 0.02, lr 3e-7 | 61.32 / 62.78 | −0.11 |
+| softmax control | τ 0.05, lr 1e-6 | 64.13 / 63.90 | +1.24 |
+| FastAP continuation | lr 3e-5 | 61.23 / 61.62 | −1.27 |
+| FastAP continuation | lr 1e-4 | 55.01 / 57.83 | −5.06 |
+| (pilot 1) FastAP continuation | lr 1e-5 | 62.75 / 62.69 | −0.14 |
+
+- **First time RL beats the matched differentiable control at the pilot stage:** best PL 64.61 vs best softmax 64.13 (+0.48, gate ≥ 0.3), and PL is ahead in every matched setting (+1.17, +1.73, +0.48). PL is also stable across epochs while the softmax control drifts.
+- Unlike SfM-120k (E5), where both tied, the unsaturated GLDv2 pool lets the difference between the objectives show. RL maximises expected AP over the sampled top-100; softmax pushes each positive to first place. This is one seed; the seeds decide.
+- Continued FastAP does not improve on the init at any lr.
+- **Seeds submitted with final evaluation** (jobs 4543826–4543834): PL τ 0.05 lr 1e-6, softmax τ 0.05 lr 1e-6 and FastAP lr 1e-5 on GLDv2 Stage 1 seeds 42, 1, 2 (seeds 1–2 start after their Stage 1 runs, jobs 4542597–98, finish). `results/runs/gcmp_*`.
+
 ### G6. RL vs controls on GLDv2, pilot 1 (jobs 4543050–4543056, 21–31 min each; init = GLDv2 Stage 1 seed 42, val 62.89)
 Batch 128 (32 landmarks × 4), 512 px, 2 × 1,432 batches, bank 4,096, no anchor; GLDv2 val mAP after epoch 1 / 2.
 
