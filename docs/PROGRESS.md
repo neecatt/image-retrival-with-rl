@@ -34,6 +34,23 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - **Split (seed 0):** train 1,546,857 images / 79,813 landmarks; val 21,285 images / 1,500 held-out landmarks (≥ 4 images each, at most 30 kept). No landmark is in both splits.
 - **Caveat:** GLDv2 may contain Oxford/Paris landmarks; standard practice, to be stated in any write-up.
 
+### G6. RL vs controls on GLDv2, pilot 1 (jobs 4543050–4543056, 21–31 min each; init = GLDv2 Stage 1 seed 42, val 62.89)
+Batch 128 (32 landmarks × 4), 512 px, 2 × 1,432 batches, bank 4,096, no anchor; GLDv2 val mAP after epoch 1 / 2.
+
+| Arm | Setting | ep 1 / ep 2 |
+|---|---|---|
+| PL RL | τ 0.01, lr 1e-5 | 50.58 / 38.19 |
+| PL RL | τ 0.02, lr 1e-5 | 52.54 / 51.96 |
+| PL RL | τ 0.02, lr 3e-6 | 60.73 / 55.96 |
+| softmax control | τ 0.01, lr 1e-5 | 0.32 / 0.56 (collapsed) |
+| softmax control | τ 0.02, lr 1e-5 | 0.13 / 0.15 (collapsed) |
+| softmax control | τ 0.02, lr 3e-6 | 48.73 / 20.73 |
+| FastAP continuation | lr 1e-5 | 62.75 / 62.69 |
+
+- **Every listwise run degrades, and the softmax control collapses at lr 1e-5.** Training reward (bank-included AP) rises at first and then falls (softmax τ 0.02, lr 1e-5: 0.96 at step 0 → 0.65 at step 600 → 0.05 by step 1,500). Both objectives use very sharp temperatures (τ 0.01–0.02, i.e. logits × 50–100) with 4,224 candidates per query; on GLDv2 with batch 128 these learning rates are far too high. PL RL degrades more slowly than the softmax control in every matched setting.
+- FastAP continuation is stable but flat (the Stage 1 cosine schedule had already decayed to 0).
+- **Pilot 2 submitted** (jobs 4543381–4543388): PL and softmax at τ 0.02 with lr 1e-6 / 3e-7 and τ 0.05 with lr 1e-6; FastAP continuation at lr 3e-5 / 1e-4 (the Stage 1 val curve was still rising, so continued metric learning at a real lr is the natural strong control).
+
 ### G5. Saturation check on the GLDv2 training pool (job 4542593, 53 min; embedding 1.55M images took 36 min)
 Seed-42 GLDv2 Stage 1; 2,000 random train queries, top-20 against the full 1,546,857-image train pool; all 40,000 pairs verified (ALIKED + LightGlue + MAGSAC at 512 px).
 
