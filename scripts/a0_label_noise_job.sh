@@ -18,7 +18,7 @@ MODEL="${1:?MODEL_CKPT}"; shift
 OUT="results/a0_label_noise"
 mkdir -p "$OUT"
 echo "$SLURM_JOB_ID $(date -Is) $(git rev-parse HEAD) model=$MODEL" >> "$OUT/jobs.txt"
-python scripts/stage_datasets.py sfm120k
+python scripts/stage_datasets.py "${A0_DATASET:-sfm120k}"
 python scripts/a0_label_noise.py --data_root "$TMPDIR/data/raw" --model "$MODEL" --out "$OUT" \
     --emb_file "$HPCVAULT/runs/a0_label_noise/train_embeddings_$(basename $(dirname $(dirname "$MODEL")))_$(basename "$MODEL" .pth).npy" "$@" 2>&1 \
     | grep -v "it/s\]\|s/it\]"

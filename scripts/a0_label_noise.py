@@ -21,7 +21,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from data.dataset import get_transforms                     # noqa: E402
-from data.dataset_sfm120k import load_sfm120k               # noqa: E402
+from data.dataset_sfm120k import load_sfm120k, load_gldv2c   # noqa: E402
 from evaluate import create_model_from_checkpoint           # noqa: E402
 from evaluation.sfm_val import extract_embeddings           # noqa: E402
 from oracle_label import ransac_inliers                     # noqa: E402
@@ -57,21 +57,26 @@ def main():
     ap.add_argument('--cpu_workers', type=int, default=24)
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--emb_file', required=True, help='cache for split embeddings (keep on HPCVAULT)')
+    ap.add_argument('--dataset', choices=['sfm120k', 'gldv2c'], default='sfm120k')
+    ap.add_argument('--skip_verify', action='store_true', help='only retrieval statistics (G5 saturation check)')
     ap.add_argument('--split', choices=['train', 'val'], default='train',
                     help='val: images the model never trained on (queries and gallery from val)')
     ap.add_argument('--feature_cache', type=int, default=8000, help='ALIKED features kept on GPU (images)')
     a = ap.parse_args()
     dev = torch.device('cuda')
     out = Path(a.out) if a.split == 'train' else Path(a.out) / a.split
+    if a.dataset != 'sfm120k':
+        out = out / a.dataset
     out.mkdir(parents=True, exist_ok=True)
 
     tf = get_transforms(a.image_size, 'eval')
-    train, val = load_sfm120k(str(Path(a.data_root) / 'sfm120k'), train_transform=tf, val_transform=tf)
+    loader_fn = load_gldv2c if a.dataset == 'gldv2c' else load_sfm120k
+    train, val = loader_fn(str(Path(a.data_root) / a.dataset), train_transform=tf, val_transform=tf)
     train = train if a.split == 'train' else val     # 'train' below means the chosen split
     labels = np.asarray(train.labels)
     emb_f = Path(a.emb_file)
-    if a.split != 'train':
-        emb_f = emb_f.with_name(f'{emb_f.stem}_{a.split}.npy')
+    if a.split != 'train' or a.dataset != 'sfm120k':
+        emb_f = emb_f.with_name(f'{emb_f.stem}_{a.dataset}_{a.split}.npy')
     emb_f.parent.mkdir(parents=True, exist_ok=True)
     if emb_f.exists():
         emb = torch.from_numpy(np.load(emb_f)).to(dev)
@@ -90,6 +95,23 @@ def main():
     sim[torch.arange(len(queries)), q] = float('-inf')
     top_sim, top_idx = sim.topk(a.topk, dim=1)
     top_sim, top_idx = top_sim.cpu().numpy(), top_idx.cpu().numpy()
+
+    # Retrieval-only saturation statistics (no verifier): how much of the top-K is already right.
+    cnt = np.bincount(labels)
+    qa = np.asarray(queries)
+    rel = labels[top_idx] == labels[qa][:, None]
+    npos = cnt[labels[qa]] - 1
+    keep = npos > 0
+    retr = {'dataset': a.dataset, 'split': a.split, 'gallery_size': int(len(labels)), 'queries': int(keep.sum()),
+            'topk': a.topk,
+            'same_label_frac_topk': float(rel[keep].mean()),
+            'recall_at_k_norm': float((rel[keep].sum(1) / np.minimum(npos[keep], a.topk)).mean()),
+            'success_at_1': float(rel[keep, 0].mean()),
+            'queries_recall_lt1': float(((rel[keep].sum(1) / np.minimum(npos[keep], a.topk)) < 1 - 1e-9).mean())}
+    (out / 'retrieval_stats.json').write_text(json.dumps(retr, indent=2))
+    print(json.dumps(retr, indent=2), flush=True)
+    if a.skip_verify:
+        return
 
     extractor = ALIKED(max_num_keypoints=a.max_kpts).eval().to(dev)
     matcher = LightGlue(features='aliked').eval().to(dev)
