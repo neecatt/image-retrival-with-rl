@@ -36,7 +36,7 @@ Reason: SfM-120k train is saturated for Stage 1 (A0, A0b, B0), so no reward comp
 - [x] G3 Loader (`load_gldv2c`), staging (`stage_datasets.py gldv2c`), `dataset.name=gldv2c` in train.py, GLDv2 val in final evaluation; tested on 2 shards
 - [x] G4 GLDv2 Stage 1 seed 42 done (PROGRESS G4b): val 62.89; ROxf M/H 49.93 / 27.15, RPar M/H 72.27 / 53.79 (vs 42.33 / 19.46 / 59.17 / 32.44 for SfM Stage 1). Seeds 1–2 submitted
 - [x] G5 Saturation check passed (PROGRESS G5): recall@20 47% and success@1 77% on the GLDv2 train pool (SfM: 97% / 99%); label/verifier disagreement 11.4%
-- [ ] G6 RL (PL) vs softmax and FastAP controls from the GLDv2 Stage 1, then seeds
+- [ ] G6 pilot submitted (jobs 4543050–56) from GLDv2 Stage 1 seed 42, batch 128, 512 px, 2 × 1,432 batches, bank 4,096: PL RL τ 0.01 / 0.02 at lr 1e-5 and τ 0.02 at 3e-6; softmax control with the same three settings; FastAP continuation lr 1e-5. Gate: best PL > best softmax by more than ~0.3 val mAP, then seeds
 - Caveat to report: GLDv2 may contain Oxford/Paris landmarks; training on GLDv2-clean for ROxford/RParis is standard practice (DELG, CVNet, SuperGlobal) but must be stated
 
 **Later**
