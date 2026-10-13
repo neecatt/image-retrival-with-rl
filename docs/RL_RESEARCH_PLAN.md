@@ -51,7 +51,9 @@ Reason: SfM-120k train is saturated for Stage 1 (A0, A0b, B0), so no reward comp
   - [x] N1a noisy pool done: 796,692 train images, 50.9% dropped by the cleaning
   - [x] N1b noisy-label Stage 1 done: val 53.21; ROxf M/H 35.68 / 16.85, RPar M/H 62.05 / 40.88
   - [x] N1c batched verifier done: 87.9 pairs/s, AUC 0.824 (2,048-kpt oracle 0.829); match threshold ~35 inliers.
-  - [ ] N1d round-based trainer for RL and the three controls at equal verifier budget
+  - [ ] N1d round-based trainer written and CPU-tested (`training/verified_rounds.py`, `scripts/train_verified.py`): per round embed the pool, pick k = 10 candidates per query (rl: PL sample from the top-100 at tau 0.05; remine: greedy; static: initial model's greedy, whole budget in round 0), verify uncached pairs, train on verified query lists (match = >= 35 inliers; unknown same-label items masked) with PL policy gradient (rl) or FastAP (controls). Default budget 4 rounds x 10,000 queries x 10 = 400k verified pairs per arm. GPU smoke runs of all three arms submitted (4559965-67)
+  - [ ] N1e "perfect cleaning" reference: Stage 1 on only the GLDv2-clean images of the same 20,000 landmarks, matched step count (job 4559935)
+  - Noisy-label control (FastAP-bank on the noisy labels, same steps) runs through the existing finetune_job.sh path
 - [ ] G9b Best control vs PL on 5 seeds; budget study (RL and strongest control at the same longer budget)
 - [ ] G9c Ablations (τ, reward k, budget, stronger controls: Smooth-AP / Recall@k surrogate on the same bank), R1M distractors, multi-scale, second backbone (DINOv2)
 - Caveat to report: GLDv2 may contain Oxford/Paris landmarks; training on GLDv2-clean for ROxford/RParis is standard practice (DELG, CVNet, SuperGlobal) but must be stated
