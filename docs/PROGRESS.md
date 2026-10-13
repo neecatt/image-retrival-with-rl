@@ -2,6 +2,18 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+## 2026-10-14: Research review of roadmap and RL plan (no training runs)
+
+- Independently aggregated five `final_eval.json` files per arm from `results/runs/gcmp_fapb_lr3e-7_seed*`, `gcmp_pl_t0.05_lr1e-6_seed*`, and `gcmp_sap_t0.05_lr3e-7_seed*`. G10 means reproduced: FastAP-bank ROxf M/H 52.63/28.78, RPar M/H 76.88/57.72; PL RL 52.15/27.66, 76.19/56.97; Smooth-AP 52.36/28.06, 76.19/56.99. This supports no demonstrated RL advantage on this binary-label setup, not a universal claim that RL cannot help retrieval.
+- Track N review recommendation: separate acquisition and optimization. Compare greedy and stochastic candidate acquisition under both a verified-label AP/listwise surrogate and PL reward tuning; include training the strongest surrogate on the exact verified pairs collected by RL. Match unique verifier calls, candidate pool, bank, initialization, selection, and report total compute/cache hits. Improvements from adaptive labels alone should not be attributed to the RL objective.
+- Verifier caveat: N0 low inlier counts establish low geometric support, not that all dropped images have wrong landmark labels. Treat failed/unverified matches as uncertain rather than automatic negatives; calibrate strong-match evidence on manually reviewed easy/hard/confusable pairs. The local N1 JSON confirms 87.9 pairs/s and same/different-label AUC 0.824, but label agreement is not independent oracle accuracy.
+- Next objective candidate: shortlist utility measured after a fixed verifier/reranker at a fixed verification budget. First test headroom on GLDv2 (B0 only ruled out saturated SfM training); compare against a top-k recall surrogate and verifier-label distillation on identical data. Cached per-pair relevance still permits differentiable supervised controls; non-differentiability alone does not imply an RL advantage.
+- Before PPO/reuse: freeze candidate IDs and gallery representations for each rollout update block, save old log-probabilities, and validate a small on-policy RLOO baseline first. Refreshing a bank/index while reusing old rankings can invalidate likelihood-ratio comparisons. Audit query/image ID self-exclusion and duplicates across the bank.
+- Literature additions: ELVA (https://arxiv.org/abs/2606.20280, ECCV 2026) already studies ranking-driven RLVR for multimodal retrieval; compare with RELER (https://arxiv.org/abs/2610.07731) and Retrieval-GRPO (https://arxiv.org/abs/2511.13885) before broad RLVR/retrieval novelty claims. These sources do not establish that geometric-verifier-guided landmark tuning is novel.
+- Documentation follow-up: the open-problem table below is a dated snapshot; P6 is superseded for the implemented PL path. ROADMAP Stage E remains marked planned despite completed GLDv2 work; RL_RESEARCH_PLAN has stale pending G9b entries and older theory/gates. Preserve historical decisions but label superseded claims and use the latest matched evidence. Oxford/Paris have been inspected across multiple phases: reserve a new locked evaluation (e.g. R1M and held-out landmark identities) for the next claim and report benchmark-overlap checks and paired uncertainty.
+
+These are review recommendations, not completed fixes or authorization to submit new jobs. No model/data changes were made.
+
 ## Open problems (as of 2026-10-10)
 
 | # | Problem | Why it matters | Status |
