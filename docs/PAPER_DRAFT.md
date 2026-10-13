@@ -11,7 +11,7 @@ When does reward tuning help image retrieval? A controlled study of policy-gradi
 3. Training-pool saturation decides whether *any* fine-tuning objective can help: on SfM-120k the Stage 1 model retrieves 97% correct top-20 items on its own training images, so rewards are flat (A0, B0); on GLDv2-clean recall@20 is 47% (G5).
 4. Practical by-product: GLDv2-clean Stage 1 followed by an AP objective over a 4k memory bank gives +4.7 / +3.9 ROxford and +2.7 / +3.0 RParis (Medium / Hard) over Stage 1 in every seed (G10). The memory-bank effect itself is known (XBM, Wang et al. 2020).
 
-Pending before the claim is final: RL on top of the best surrogate model (pilot running), ablations of the RL policy (τ, k, budget), R1M distractors.
+RL on top of the best surrogate model gives nothing (G11: +0.06 val vs continued FastAP-bank). Pending before the claim is final: ablations of the RL policy (τ, k, budget), R1M distractors.
 
 ## Outline
 1. **Introduction.** Task-reward tuning (Susano Pinto et al. 2023) and recent RL-for-retrieval work (RELER, Retrieval-GRPO) report gains. Retrieval has strong differentiable surrogates of its metric, so the right question is whether RL beats them under matched conditions.

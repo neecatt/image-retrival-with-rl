@@ -34,6 +34,20 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - **Split (seed 0):** train 1,546,857 images / 79,813 landmarks; val 21,285 images / 1,500 held-out landmarks (≥ 4 images each, at most 30 kept). No landmark is in both splits.
 - **Caveat:** GLDv2 may contain Oxford/Paris landmarks; standard practice, to be stated in any write-up.
 
+### G11. RL on top of the best surrogate model (jobs 4555169–4555174, 28–30 min each)
+Init: FastAP-bank seed 42 (`gcmp_fapb_lr3e-7_seed42`, GLDv2 val 65.05). Same budget, batches, bank and selection as G10.
+
+| Arm | Setting | ep 1 / ep 2 | best Δ vs init |
+|---|---|---|---|
+| PL RL | τ 0.05, lr 3e-7 | 65.11 / **65.13** | +0.08 |
+| PL RL | τ 0.05, lr 1e-6 | 64.66 / 64.60 | −0.39 |
+| PL RL | τ 0.02, lr 3e-7 | 64.68 / 64.58 | −0.37 |
+| FastAP-bank continued | lr 1e-7 | 65.00 / 65.04 | −0.01 |
+| FastAP-bank continued | lr 3e-7 | 64.96 / **65.07** | +0.02 |
+| FastAP-bank continued | lr 1e-6 | 64.75 / 64.99 | −0.06 |
+
+- **No gain.** Best RL 65.13 vs best continued control 65.07 (+0.06, gate ≥ 0.3). From the best surrogate model, neither objective moves validation within this budget. The Pinto recipe gives nothing here, as on SfM-120k (R1). No seeds run.
+
 ### G10. PL RL vs AP-surrogate controls on the same bank, 5 seeds (jobs 4553898–4553907, 32–37 min each) — **the G7/G8 claim does not hold**
 Smooth-AP (sigmoid τ 0.05, lr 3e-7) and FastAP on the bank (lr 3e-7), selected on the seed-42 pilot (G9), same batches, bank, budget and selection as PL RL.
 
