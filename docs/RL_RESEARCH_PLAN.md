@@ -42,6 +42,11 @@ Reason: SfM-120k train is saturated for Stage 1 (A0, A0b, B0), so no reward comp
 - [x] G9a Stronger-control pilot done (PROGRESS G9): FastAP on the bank 65.05 val (> PL 64.61), Smooth-AP 64.56. Both on 5 seeds with final evaluation submitted (4553898–907); long-RL preview running (4553037)
 - [x] G9b 5 seeds vs stronger controls done (PROGRESS G10): **PL RL ties Smooth-AP and loses to FastAP on the bank** (RPar M −0.68, t −3.8). G7/G8 success claim withdrawn; the gain came from the bank. Long-RL 4× preview: no change
 - [x] G11 RL on top of the best surrogate (PROGRESS G11): best RL 65.13 vs continued FastAP-bank 65.07 (init 65.05). Gate not met; write-up started in [PAPER_DRAFT.md](PAPER_DRAFT.md)
+
+**Track N: verifier-in-the-loop RL on noisy full GLDv2 (user decision 2026-10-13: a positive RL result matters more than the deadline)**
+- Data facts: for the 79,813 GLDv2-clean training landmarks, full GLDv2 has 3,159,948 images, of which 1,613,091 (51%) were dropped by the cleaning.
+- Fair controls (decided before building): N-C1 FastAP-bank on noisy labels; N-C2 FastAP-bank on labels cleaned once with the verifier (same verifier budget); **N-C3 iterative re-mining: verify the current model's greedy top-k every round and train FastAP-bank on the verified labels (strongest)**. RL must beat N-C3 to claim a gain; its extra ingredients are only exploration beyond the greedy top-k and the reward-shaped objective, so the odds are uncertain.
+- [ ] N0 Feasibility (job 4557280): verify 2,000 dropped vs 2,000 kept images against 3 kept references of the same landmark (`scripts/gld_noise_check.py`). Gate: dropped images verify clearly less often than kept ones (label noise the verifier can see) and throughput is sufficient for an equal-budget design
 - [ ] G9b Best control vs PL on 5 seeds; budget study (RL and strongest control at the same longer budget)
 - [ ] G9c Ablations (τ, reward k, budget, stronger controls: Smooth-AP / Recall@k surrogate on the same bank), R1M distractors, multi-scale, second backbone (DINOv2)
 - Caveat to report: GLDv2 may contain Oxford/Paris landmarks; training on GLDv2-clean for ROxford/RParis is standard practice (DELG, CVNet, SuperGlobal) but must be stated
