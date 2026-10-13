@@ -39,7 +39,7 @@ Reason: SfM-120k train is saturated for Stage 1 (A0, A0b, B0), so no reward comp
 - [x] G6 pilots done (PROGRESS G6, G6b): at lr 1e-6 PL RL 64.61 vs softmax 64.13 vs FastAP 62.75 (init 62.89); PL ahead in every matched setting. **Gate met**
 - [x] G7 3 seeds done (PROGRESS G7): **§5 success criterion met over 3 seeds.** PL RL vs FastAP control ROxf M/H +2.98 / +2.32, RPar M/H +2.13 / +2.44; vs softmax control +4.25 / +4.67 / +2.63 / +2.15; positive in every seed and column
 - [x] G8 5 seeds done (PROGRESS G8): PL RL beats FastAP and softmax controls in all 5 seeds on all four protocols (vs FastAP ROxf M/H +4.08 / +3.02, RPar M/H +2.03 / +2.49)
-- [ ] G9a Stronger controls (Smooth-AP, FastAP on the bank) seed-42 pilot submitted (4553027–36, PROGRESS G9); long-RL preview 4× budget (4553037)
+- [x] G9a Stronger-control pilot done (PROGRESS G9): FastAP on the bank 65.05 val (> PL 64.61), Smooth-AP 64.56. Both on 5 seeds with final evaluation submitted (4553898–907); long-RL preview running (4553037)
 - [ ] G9b Best control vs PL on 5 seeds; budget study (RL and strongest control at the same longer budget)
 - [ ] G9c Ablations (τ, reward k, budget, stronger controls: Smooth-AP / Recall@k surrogate on the same bank), R1M distractors, multi-scale, second backbone (DINOv2)
 - Caveat to report: GLDv2 may contain Oxford/Paris landmarks; training on GLDv2-clean for ROxford/RParis is standard practice (DELG, CVNet, SuperGlobal) but must be stated
