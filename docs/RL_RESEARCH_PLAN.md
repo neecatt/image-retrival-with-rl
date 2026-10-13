@@ -41,7 +41,7 @@ Reason: SfM-120k train is saturated for Stage 1 (A0, A0b, B0), so no reward comp
 - [x] G8 5 seeds done (PROGRESS G8; superseded by G10, controls lacked the bank): PL RL beats FastAP (no bank) and softmax controls in all 5 seeds on all four protocols (vs FastAP ROxf M/H +4.08 / +3.02, RPar M/H +2.03 / +2.49)
 - [x] G9a Stronger-control pilot done (PROGRESS G9): FastAP on the bank 65.05 val (> PL 64.61), Smooth-AP 64.56. Both on 5 seeds with final evaluation submitted (4553898–907); long-RL preview running (4553037)
 - [x] G9b 5 seeds vs stronger controls done (PROGRESS G10): **PL RL ties Smooth-AP and loses to FastAP on the bank** (RPar M −0.68, t −3.8). G7/G8 success claim withdrawn; the gain came from the bank. Long-RL 4× preview: no change
-- [ ] G11 RL on top of the best surrogate (FastAP-bank seed 42) vs continued FastAP-bank: pilot submitted (4555169–74); write-up started in [PAPER_DRAFT.md](PAPER_DRAFT.md)
+- [x] G11 RL on top of the best surrogate (PROGRESS G11): best RL 65.13 vs continued FastAP-bank 65.07 (init 65.05). Gate not met; write-up started in [PAPER_DRAFT.md](PAPER_DRAFT.md)
 - [ ] G9b Best control vs PL on 5 seeds; budget study (RL and strongest control at the same longer budget)
 - [ ] G9c Ablations (τ, reward k, budget, stronger controls: Smooth-AP / Recall@k surrogate on the same bank), R1M distractors, multi-scale, second backbone (DINOv2)
 - Caveat to report: GLDv2 may contain Oxford/Paris landmarks; training on GLDv2-clean for ROxford/RParis is standard practice (DELG, CVNet, SuperGlobal) but must be stated
