@@ -41,6 +41,16 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - **Pilot on seed 42 (jobs 4553027–4553036):** Smooth-AP with sigmoid τ 0.01 / 0.05 × lr 3e-7 / 1e-6 / 3e-6 (6 runs); FastAP-bank at lr 3e-7 / 1e-6 / 3e-6 / 1e-5 (4 runs). PL RL had 6 tuning runs (G6, G6b), so the tuning effort is comparable.
 - **Long-RL preview (job 4553037):** PL RL τ 0.05, lr 1e-6, 4 × 2,864 batches (4× the G7/G8 budget, about one GLDv2 epoch), seed 42, with final evaluation. This is a preview only; the decisive budget study will run RL and the strongest control at the same longer budget.
 - **Correction:** when the user interrupted the command adding these controls, I said nothing had been written. In fact the file edits had already been applied. They were inspected (`git diff`) and tested before this commit.
+- **Pilot result (seed 42, GLDv2 val, ep 1 / ep 2; init 62.89; best PL RL 64.61):**
+
+| Control | lr 3e-7 | lr 1e-6 | lr 3e-6 | lr 1e-5 |
+|---|---|---|---|---|
+| Smooth-AP, sigmoid τ 0.01 | 62.84 / 63.52 | 61.71 / 57.48 | 54.33 / 50.12 | |
+| Smooth-AP, sigmoid τ 0.05 | 64.45 / **64.56** | 64.20 / 64.22 | 57.27 / 59.21 | |
+| FastAP on the bank | 64.85 / **65.05** | 64.68 / 65.01 | 59.04 / 59.72 | 47.38 / 52.53 |
+
+- **On validation, FastAP with the bank beats PL RL (65.05 vs 64.61), and Smooth-AP ties (64.56).** The G7/G8 FastAP control had no bank, so part or all of the PL advantage there may come from the bank rather than the reward. Validation gains have not always transferred to the benchmarks (the softmax control gained +1.1 val and nothing on ROxford/RParis), so the benchmarks decide.
+- **Submitted:** both controls at their best setting on all 5 seeds with final evaluation (jobs 4553898–4553907; `gcmp_fapb_lr3e-7_seed*`, `gcmp_sap_t0.05_lr3e-7_seed*`).
 
 ### G8. GLDv2: PL RL vs controls, 5 seeds (adds seeds 3–4: Stage 1 jobs 4549985 / 4549989, 9 h 57 min / 9 h 26 min; comparisons 4549986–88, 4549990–92, 24–35 min)
 Same settings as G7.
