@@ -46,7 +46,8 @@ Reason: SfM-120k train is saturated for Stage 1 (A0, A0b, B0), so no reward comp
 **Track N: verifier-in-the-loop RL on noisy full GLDv2 (user decision 2026-10-13: a positive RL result matters more than the deadline)**
 - Data facts: for the 79,813 GLDv2-clean training landmarks, full GLDv2 has 3,159,948 images, of which 1,613,091 (51%) were dropped by the cleaning.
 - Fair controls (decided before building): N-C1 FastAP-bank on noisy labels; N-C2 FastAP-bank on labels cleaned once with the verifier (same verifier budget); **N-C3 iterative re-mining: verify the current model's greedy top-k every round and train FastAP-bank on the verified labels (strongest)**. RL must beat N-C3 to claim a gain; its extra ingredients are only exploration beyond the greedy top-k and the reward-shaped objective, so the odds are uncertain.
-- [ ] N0 Feasibility (job 4557280): verify 2,000 dropped vs 2,000 kept images against 3 kept references of the same landmark (`scripts/gld_noise_check.py`). Gate: dropped images verify clearly less often than kept ones (label noise the verifier can see) and throughput is sufficient for an equal-budget design
+- [x] N0 Feasibility passed (PROGRESS N0): dropped images verify 14% (≥ 25 inliers) vs 72% for kept ones; throughput 14 pairs/s is the bottleneck
+- [ ] N1 Build: pack the noisy training pool (subset of landmarks), fast batched verifier with feature cache, Stage 1 on noisy labels, verified-pair cache, rounds of RL and of the three controls at equal verifier budget
 - [ ] G9b Best control vs PL on 5 seeds; budget study (RL and strongest control at the same longer budget)
 - [ ] G9c Ablations (τ, reward k, budget, stronger controls: Smooth-AP / Recall@k surrogate on the same bank), R1M distractors, multi-scale, second backbone (DINOv2)
 - Caveat to report: GLDv2 may contain Oxford/Paris landmarks; training on GLDv2-clean for ROxford/RParis is standard practice (DELG, CVNet, SuperGlobal) but must be stated
