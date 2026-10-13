@@ -39,6 +39,10 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 
 ## 2026-10-13: Track N, verifier-in-the-loop RL on noisy full GLDv2
 
+### N1d. Verifier-in-the-loop trainer: GPU smoke runs (jobs 4559965–4559967, 7–8 min each)
+30,000-image slice, 2 rounds × 400 queries × 10 candidates, 30 training steps per round. All three arms ran end to end. Verifier throughput inside the loop ~140 pairs/s (cache + batching); budgets equal (rl 7,960, remine 7,913, static 7,936 verified pairs). 55–66% of queries have at least one verified match among their 10 candidates. Val unchanged (53.21 → 53.29–53.41), as expected for 60 steps.
+- **Full seed-42 pilot submitted** (jobs 4560131–4560138): rl / remine / static at lr 1e-6 and 3e-7 (4 rounds × 10,000 queries × 10 candidates = 400k verified pairs, 4 × 716 steps); noisy-label FastAP-bank control at lr 1e-6 and 3e-7 (2 × 1,432 steps of batch 128).
+
 ### N1a–N1c. Noisy pool, noisy-label Stage 1, batched verifier (jobs 4557471, 4557472, 4557490)
 - **Noisy pool (N1a, 6 min):** 20,000 random GLDv2-clean training landmarks with all their full-GLDv2 images: 796,692 train images, of which 390,982 are in GLDv2-clean and **405,710 (50.9%) were dropped by the cleaning**; val = the 21,285 GLDv2-clean val images. `$HPCVAULT/datasets/gldv2n` (vault quota now 1,543 / 2,097 GB hard).
 - **Stage 1 on noisy labels (N1b, 5 h 4 min):** lr 1e-4, batch 128, 512 px, 10 epochs. Val mAP 43.91 → 53.21. Benchmarks (long side 1024): **ROxf M/H 35.68 / 16.85, RPar M/H 62.05 / 40.88**, far below the GLDv2-clean Stage 1 (47.9 / 24.9 / 74.2 / 54.7, 80k landmarks). Checkpoint `$HPCVAULT/runs/gn_s1_b128_lr1e-4_seed42/`.
