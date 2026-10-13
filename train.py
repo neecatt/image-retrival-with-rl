@@ -369,11 +369,13 @@ def create_dataloaders(config, stage='stage1'):
         sfm_root = root_dir_cfg / sfm_names[0]
         loader_fn = {'gldv2c': load_gldv2c, 'gldv2n': load_gldv2n}.get(sfm_names[0], load_sfm120k)
 
+        extra = {'clean_only': True} if config['dataset'].get('clean_only') else {}
         train_ds, val_ds = loader_fn(
             root_dir=str(sfm_root),
             train_transform=train_transform,
             val_transform=val_transform,
             seed=seed,
+            **extra,
         )
 
         print(f"\n{sfm_names[0]}: {len(train_ds)} train images, {len(val_ds)} val images")

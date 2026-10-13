@@ -103,11 +103,14 @@ def load_gldv2n(
     train_transform: Optional[transforms.Compose] = None,
     val_transform: Optional[transforms.Compose] = None,
     seed: int = 42,
+    clean_only: bool = False,
 ) -> Tuple[SfM120kDataset, SfM120kDataset]:
     """Noisy-label GLDv2 pool (scripts/prepare_gldv2_noisy.py): train labels from train.csv,
-    val = GLDv2-clean val."""
+    val = GLDv2-clean val. clean_only keeps only the train images GLDv2-clean kept (the
+    "perfect cleaning" reference)."""
     return load_sfm120k(root_dir, train_transform, val_transform, seed,
-                        pkl_name='gldv2n.pkl', path_fn=_gldv2_id_to_path)
+                        pkl_name='gldv2n.pkl', path_fn=_gldv2_id_to_path,
+                        train_keep_key='in_clean' if clean_only else None)
 
 
 def load_sfm120k(
@@ -117,6 +120,7 @@ def load_sfm120k(
     seed: int = 42,
     pkl_name: str = 'retrieval-SfM-120k.pkl',
     path_fn=_hash_to_path,
+    train_keep_key: Optional[str] = None,
 ) -> Tuple[SfM120kDataset, SfM120kDataset]:
     """
     Load SfM-120k from disk.
@@ -185,6 +189,9 @@ def load_sfm120k(
 
         return paths, labels
 
+    if train_keep_key is not None:   # keep only flagged train images (e.g. in_clean)
+        keep = db['train'][train_keep_key]
+        db['train'] = {k: [x for x, f in zip(db['train'][k], keep) if f] for k in ('cids', 'cluster')}
     train_paths, train_labels = _build_dataset(db['train'], train_transform)
     val_paths,   val_labels   = _build_dataset(db['val'],   val_transform)
 
