@@ -27,6 +27,11 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 
 ## 2026-10-13: Track N, verifier-in-the-loop RL on noisy full GLDv2
 
+### N1a–N1c. Noisy pool, noisy-label Stage 1, batched verifier (jobs 4557471, 4557472, 4557490)
+- **Noisy pool (N1a, 6 min):** 20,000 random GLDv2-clean training landmarks with all their full-GLDv2 images: 796,692 train images, of which 390,982 are in GLDv2-clean and **405,710 (50.9%) were dropped by the cleaning**; val = the 21,285 GLDv2-clean val images. `$HPCVAULT/datasets/gldv2n` (vault quota now 1,543 / 2,097 GB hard).
+- **Stage 1 on noisy labels (N1b, 5 h 4 min):** lr 1e-4, batch 128, 512 px, 10 epochs. Val mAP 43.91 → 53.21. Benchmarks (long side 1024): **ROxf M/H 35.68 / 16.85, RPar M/H 62.05 / 40.88**, far below the GLDv2-clean Stage 1 (47.9 / 24.9 / 74.2 / 54.7, 80k landmarks). Checkpoint `$HPCVAULT/runs/gn_s1_b128_lr1e-4_seed42/`.
+- **Batched verifier (N1c, 8 min incl. staging):** 1,024 ALIKED keypoints, LightGlue in batches of 32, MAGSAC. **87.9 pairs/s** on one RTX PRO 6000 (vs 14 per-pair). Same/different-landmark AUC **0.824**; on the same 400 pairs the 2,048-keypoint per-pair oracle reaches 0.829 (Spearman 0.82 between the two). Inliers: same landmark median 39.5 (62% ≥ 25), different landmark median 14 (6.7% ≥ 25, p99 = 34). A match threshold of ~35 inliers keeps different-landmark false matches near 1%.
+
 ### N0. Feasibility: how noisy are the images the cleaning dropped? (job 4557280, 20 min)
 2,000 random GLDv2-clean training landmarks (val excluded). Per landmark, one *dropped* image (in train.csv, not in train_clean.csv) and one *kept* image, each verified against the same 3 other kept images (ALIKED + LightGlue + MAGSAC, long side 512). Best reference counts.
 
