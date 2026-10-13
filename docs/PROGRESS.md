@@ -34,6 +34,14 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - **Split (seed 0):** train 1,546,857 images / 79,813 landmarks; val 21,285 images / 1,500 held-out landmarks (≥ 4 images each, at most 30 kept). No landmark is in both splits.
 - **Caveat:** GLDv2 may contain Oxford/Paris landmarks; standard practice, to be stated in any write-up.
 
+### G9. Stronger differentiable controls and a longer RL run (submitted 2026-10-13)
+- **Why:** a reviewer's first question is whether any differentiable AP loss on the same setup matches PL RL. Two AP surrogates were added to `RLTrainer`, using the same all-vs-all batches and 4,096-entry bank:
+  - `smoothap_control`: Smooth-AP (Brown et al., ECCV 2020), sigmoid temperature = `pl_tau`. CPU check: at a vanishing temperature it equals exact AP (1 − AP 0.6892 vs 0.6891).
+  - `fastap_bank`: FastAP (the Stage 1 loss) over batch + bank, 10 bins.
+- **Pilot on seed 42 (jobs 4553027–4553036):** Smooth-AP with sigmoid τ 0.01 / 0.05 × lr 3e-7 / 1e-6 / 3e-6 (6 runs); FastAP-bank at lr 3e-7 / 1e-6 / 3e-6 / 1e-5 (4 runs). PL RL had 6 tuning runs (G6, G6b), so the tuning effort is comparable.
+- **Long-RL preview (job 4553037):** PL RL τ 0.05, lr 1e-6, 4 × 2,864 batches (4× the G7/G8 budget, about one GLDv2 epoch), seed 42, with final evaluation. This is a preview only; the decisive budget study will run RL and the strongest control at the same longer budget.
+- **Correction:** when the user interrupted the command adding these controls, I said nothing had been written. In fact the file edits had already been applied. They were inspected (`git diff`) and tested before this commit.
+
 ### G8. GLDv2: PL RL vs controls, 5 seeds (adds seeds 3–4: Stage 1 jobs 4549985 / 4549989, 9 h 57 min / 9 h 26 min; comparisons 4549986–88, 4549990–92, 24–35 min)
 Same settings as G7.
 
