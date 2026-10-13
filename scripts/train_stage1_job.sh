@@ -41,5 +41,5 @@ python train.py --config "$OUT/run_config.yaml" --stage1_only "${RESUME[@]}" 2>&
 [ "${SKIP_FINAL_EVAL:-0}" = 1 ] && exit 0
 BEST=$(ls -t "$CKPT"/stage1_*/stage1_best.pth | head -1)
 echo "Final evaluation of $BEST"
-VAL_ARGS=(); [ "$TRAIN_SET" = gldv2c ] && VAL_ARGS=(--val_set gldv2c --val_size 512)
+VAL_ARGS=(); [[ "$TRAIN_SET" == gldv2* ]] && VAL_ARGS=(--val_set "$TRAIN_SET" --val_size 512)
 python scripts/eval_baselines.py --data_root "$TMPDIR/data/raw" --out "$OUT/final_eval.json" --models "$BEST" "${VAL_ARGS[@]}"
