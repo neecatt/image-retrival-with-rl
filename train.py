@@ -45,7 +45,7 @@ from training.trainer import StandardTrainer
 from training.rl_trainer import RLTrainer
 from evaluation.evaluator import RetrievalEvaluator
 from data.dataset import ImageRetrievalDataset, RevisitedDataset, get_transforms
-from data.dataset_sfm120k import load_sfm120k, load_gldv2c
+from data.dataset_sfm120k import load_sfm120k, load_gldv2c, load_gldv2n
 from data.dataloader import get_dataloaders
 from data.dataloader import BalancedBatchSampler
 from utils.helpers import set_seed, get_device, save_checkpoint, load_checkpoint, save_training_curves
@@ -364,10 +364,10 @@ def create_dataloaders(config, stage='stage1'):
 
     # SfM-120k — proper training set for retrieval (separate from eval benchmarks)
     # GLDv2-clean (scripts/prepare_gldv2.py) uses the same structure and leave-one-out val
-    sfm_names = [n for n in dataset_names if n in ('sfm120k', 'gldv2c')]
+    sfm_names = [n for n in dataset_names if n in ('sfm120k', 'gldv2c', 'gldv2n')]
     if sfm_names:
         sfm_root = root_dir_cfg / sfm_names[0]
-        loader_fn = load_gldv2c if sfm_names[0] == 'gldv2c' else load_sfm120k
+        loader_fn = {'gldv2c': load_gldv2c, 'gldv2n': load_gldv2n}.get(sfm_names[0], load_sfm120k)
 
         train_ds, val_ds = loader_fn(
             root_dir=str(sfm_root),

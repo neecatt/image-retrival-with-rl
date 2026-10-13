@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from data.dataset import LongSideResize, RevisitedDataset, get_transforms  # noqa: E402
-from data.dataset_sfm120k import load_sfm120k, load_gldv2c                           # noqa: E402
+from data.dataset_sfm120k import load_sfm120k, load_gldv2c, load_gldv2n                           # noqa: E402
 from evaluate import create_model_from_checkpoint                       # noqa: E402
 from evaluation.revisited_ap import revisited_map                       # noqa: E402
 from evaluation.sfm_val import evaluate_sfm_val                         # noqa: E402
@@ -50,7 +50,7 @@ def main():
     ap.add_argument('--out', required=True)
     ap.add_argument('--size', type=int, default=1024)
     ap.add_argument('--val_size', type=int, default=1024)
-    ap.add_argument('--val_set', default='sfm120k', choices=['sfm120k', 'gldv2c'],
+    ap.add_argument('--val_set', default='sfm120k', choices=['sfm120k', 'gldv2c', 'gldv2n'],
                     help='held-out validation set reported next to the benchmarks (key <val_set>_val; sfm_val for sfm120k)')
     ap.add_argument('--workers', type=int, default=8)
     ap.add_argument('--datasets', nargs='+', default=['roxford5k', 'rparis6k'])
@@ -59,7 +59,7 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     root = Path(a.data_root)
 
-    loader_fn = load_gldv2c if a.val_set == 'gldv2c' else load_sfm120k
+    loader_fn = {'gldv2c': load_gldv2c, 'gldv2n': load_gldv2n}.get(a.val_set, load_sfm120k)
     _, sfm_val = loader_fn(str(root / a.val_set), val_transform=get_transforms(a.val_size, mode='eval'))
     val_key = 'sfm_val' if a.val_set == 'sfm120k' else f'{a.val_set}_val'
     resize_tf = {'short': T.Compose([T.Resize(a.size), T.ToTensor(), NORM]),

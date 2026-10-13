@@ -43,6 +43,6 @@ python train.py --config "$OUT/run_config.yaml" --${STAGE}_only --init_checkpoin
 
 if [ "$FINAL" = 1 ]; then
     BEST=$(ls -t "$CKPT"/${STAGE}_*/${STAGE}_best.pth | head -1)
-    VAL_ARGS=(); [ "$TRAIN_SET" = gldv2c ] && VAL_ARGS=(--val_set gldv2c --val_size 512)
+    VAL_ARGS=(); [[ "$TRAIN_SET" == gldv2* ]] && VAL_ARGS=(--val_set "$TRAIN_SET" --val_size 512)
     python scripts/eval_baselines.py --data_root "$TMPDIR/data/raw" --out "$OUT/final_eval.json" --models "$BEST" "${VAL_ARGS[@]}"
 fi

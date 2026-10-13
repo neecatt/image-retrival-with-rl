@@ -98,6 +98,18 @@ def load_gldv2c(
                         pkl_name='gldv2c.pkl', path_fn=_gldv2_id_to_path)
 
 
+def load_gldv2n(
+    root_dir: str,
+    train_transform: Optional[transforms.Compose] = None,
+    val_transform: Optional[transforms.Compose] = None,
+    seed: int = 42,
+) -> Tuple[SfM120kDataset, SfM120kDataset]:
+    """Noisy-label GLDv2 pool (scripts/prepare_gldv2_noisy.py): train labels from train.csv,
+    val = GLDv2-clean val."""
+    return load_sfm120k(root_dir, train_transform, val_transform, seed,
+                        pkl_name='gldv2n.pkl', path_fn=_gldv2_id_to_path)
+
+
 def load_sfm120k(
     root_dir: str,
     train_transform: Optional[transforms.Compose] = None,

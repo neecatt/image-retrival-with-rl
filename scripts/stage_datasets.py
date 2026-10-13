@@ -19,6 +19,8 @@ SPEC = {
     'sfm120k':   (['ims.tar.gz'], ['retrieval-SfM-120k.pkl'], 60 << 30),
     # GLDv2-clean at long side 512 (scripts/prepare_gldv2.py), 500 uncompressed shards
     'gldv2c':    ([f'shards/gldv2c_{n:03d}.tar' for n in range(500)], ['gldv2c.pkl'], 120 << 30),
+    # noisy-label GLDv2 pool (scripts/prepare_gldv2_noisy.py)
+    'gldv2n':    ([f'shards/gldv2n_{n:03d}.tar' for n in range(500)], ['gldv2n.pkl'], 80 << 30),
 }
 
 def die(msg):
@@ -33,7 +35,7 @@ def extract(archive, jpg, name):
             parts = [p for p in m.name.split('/') if p not in ('', '.')]
             if not m.isreg() or m.name.startswith('/') or '..' in parts or not parts:
                 die(f"unsafe member {m.name!r} in {archive}")
-            if name == 'gldv2c':
+            if name in ('gldv2c', 'gldv2n'):
                 if not GLD_RE.match(m.name):
                     die(f"unexpected gldv2c member {m.name!r}")
                 rel = Path(*parts)
