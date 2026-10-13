@@ -105,3 +105,70 @@ def softmax_control_loss(emb: torch.Tensor, labels: torch.Tensor, tau: float, to
         k = min(topk, N - 2)
         greedy = ap_at_k(torch.gather(rel, -1, scores.topk(k, -1).indices), npos)
     return loss, {'reward': greedy[has_pos].mean().item(), 'reward_mean_policy': greedy[has_pos].mean().item()}
+
+
+def _bank_scores(emb, labels, mem_emb, mem_labels):
+    """Cosine scores of every batch item against the batch plus the memory bank, with masks."""
+    B = emb.size(0)
+    gal, glab = emb, labels
+    if mem_emb is not None and mem_emb.numel() > 0:
+        gal = torch.cat([emb, mem_emb.detach()])
+        glab = torch.cat([labels, mem_labels])
+    N = gal.size(0)
+    self_mask = torch.zeros(B, N, dtype=torch.bool, device=emb.device)
+    self_mask[torch.arange(B), torch.arange(B)] = True
+    sim = emb @ gal.t()
+    rel = ((labels[:, None] == glab[None, :]) & ~self_mask)
+    return sim, rel, self_mask
+
+
+def smoothap_control_loss(emb, labels, tau_sigmoid: float, topk: int, mem_emb=None, mem_labels=None):
+    """Differentiable AP control on identical inputs: Smooth-AP (Brown et al., ECCV 2020), ranks
+    relaxed with sigmoid((s_j - s_i) / tau_sigmoid), over the batch plus memory bank."""
+    sim, rel, self_mask = _bank_scores(emb, labels, mem_emb, mem_labels)
+    valid = ~self_mask
+    npos = rel.sum(-1)
+    has = npos > 0
+    sim, rel, valid, npos = sim[has], rel[has], valid[has], npos[has]
+    P = int(npos.max().item()) if has.any() else 0
+    if P == 0:
+        return emb.sum() * 0, {'reward': 0.0, 'reward_mean_policy': 0.0}
+    # positives of each query, padded to P (padding masked out)
+    pos_idx = torch.where(rel, torch.arange(rel.size(1), device=sim.device)[None].expand_as(rel),
+                          torch.full_like(rel, rel.size(1), dtype=torch.long)).sort(-1).values[:, :P]
+    pos_ok = pos_idx < rel.size(1)
+    pos_idx = pos_idx.clamp(max=rel.size(1) - 1)
+    s_pos = torch.gather(sim, 1, pos_idx)                                     # (Q,P)
+    d = torch.sigmoid((sim[:, None, :] - s_pos[:, :, None]) / tau_sigmoid)    # (Q,P,N)
+    not_self = torch.ones_like(d, dtype=torch.bool).scatter_(2, pos_idx[:, :, None], False)
+    rank_all = 1 + (d * (valid[:, None, :] & not_self)).sum(-1)
+    rank_pos = 1 + (d * (rel[:, None, :] & not_self)).sum(-1)
+    ap = ((rank_pos / rank_all) * pos_ok).sum(-1) / npos
+    loss = (1 - ap).mean()
+    with torch.no_grad():
+        k = min(topk, sim.size(1) - 2)
+        greedy = ap_at_k(torch.gather(rel.float(), -1, sim.masked_fill(~valid, -2).topk(k, -1).indices), npos)
+    return loss, {'reward': greedy.mean().item(), 'reward_mean_policy': greedy.mean().item()}
+
+
+def fastap_bank_loss(emb, labels, num_bins: int, topk: int, mem_emb=None, mem_labels=None):
+    """FastAP (Cakir et al., CVPR 2019; the Stage 1 loss) over the batch plus memory bank:
+    soft histogram of squared distances d = 2 - 2 s in [0, 4] with triangular kernels."""
+    sim, rel, self_mask = _bank_scores(emb, labels, mem_emb, mem_labels)
+    valid = (~self_mask).float()
+    relf = rel.float()
+    npos = relf.sum(-1)
+    has = npos > 0
+    d = (2 - 2 * sim).clamp(0, 4)
+    delta = 4.0 / num_bins
+    centers = torch.linspace(0, 4, num_bins + 1, device=emb.device)
+    pulse = (1 - (d[..., None] - centers).abs() / delta).clamp(min=0)          # (B,N,L+1)
+    h_pos = (pulse * (relf * valid)[..., None]).sum(1)                         # (B,L+1)
+    h_all = (pulse * valid[..., None]).sum(1)
+    H_pos, H_all = h_pos.cumsum(-1), h_all.cumsum(-1)
+    ap = (H_pos * h_pos / H_all.clamp(min=1e-8)).sum(-1) / npos.clamp(min=1)
+    loss = (1 - ap[has]).mean() if has.any() else emb.sum() * 0
+    with torch.no_grad():
+        k = min(topk, sim.size(1) - 2)
+        greedy = ap_at_k(torch.gather(relf, -1, sim.masked_fill(self_mask, -2).topk(k, -1).indices), npos)[has]
+    return loss, {'reward': greedy.mean().item(), 'reward_mean_policy': greedy.mean().item()}
