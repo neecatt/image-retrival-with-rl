@@ -25,6 +25,21 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - On unseen images there is more room (recall@20 90%, a third of queries affected), but training happens on the memorised pool.
 - **Decision: Track B is not built on SfM-120k.** Like A0/A0b, the limit is the training data, not the algorithm: Stage 1 has fitted SfM-120k train, so any reward computed there is near its ceiling. A reward-tuning gain needs a training pool the model cannot fit, e.g. GLDv2 (≈ 4M images, noisy labels; its "clean" subset was itself built by local-feature verification).
 
+## 2026-10-13: Track N, verifier-in-the-loop RL on noisy full GLDv2
+
+### N0. Feasibility: how noisy are the images the cleaning dropped? (job 4557280, 20 min)
+2,000 random GLDv2-clean training landmarks (val excluded). Per landmark, one *dropped* image (in train.csv, not in train_clean.csv) and one *kept* image, each verified against the same 3 other kept images (ALIKED + LightGlue + MAGSAC, long side 512). Best reference counts.
+
+| Query | verified (≥ 25 inliers) | verified (≥ 100) | median best inliers |
+|---|---|---|---|
+| kept (GLDv2-clean) | 72.0% | 40.8% | 68 |
+| dropped by the cleaning | **14.4%** | **3.1%** | **13** |
+
+- **Gate passed.** Dropped images almost never share geometry with the kept images of their landmark. For these landmarks, full GLDv2 has 51% dropped images, so training on the noisy labels means half the "positives" are unverifiable.
+- **Contact sheets** (`results/f0_gld_noise/`): unverified dropped images are a mix of unrelated scenes and other aspects of the place (statues, frescoes, interiors, landscapes, maps). Some are arguably the right landmark but not matchable. ROxford/RParis positives are matchable views of the buildings, so the verifier is a reasonable proxy for benchmark relevance. (The sheets pair each query with its first reference, not necessarily the best-matching one.)
+- **Throughput is the bottleneck:** 14 pairs/s on one GPU, reading single images from the raw tars on HPCVAULT and matching pairs one by one. An equal-verifier-budget design with ~10⁵–10⁶ verified pairs needs a faster verifier (batched matching, cached features, packed images on TMPDIR), aiming at ≥ 100 pairs/s per GPU, plus array jobs.
+- Built once: index of all 4,132,914 raw train images (`$HPCVAULT/datasets/gldv2/train_index.npz`: tar, offset, size).
+
 ## 2026-10-11: Track G, moving training to GLDv2-clean
 
 ### G1–G2. Download and packing
