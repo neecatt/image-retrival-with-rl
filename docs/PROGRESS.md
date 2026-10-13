@@ -34,6 +34,30 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - **Split (seed 0):** train 1,546,857 images / 79,813 landmarks; val 21,285 images / 1,500 held-out landmarks (≥ 4 images each, at most 30 kept). No landmark is in both splits.
 - **Caveat:** GLDv2 may contain Oxford/Paris landmarks; standard practice, to be stated in any write-up.
 
+### G8. GLDv2: PL RL vs controls, 5 seeds (adds seeds 3–4: Stage 1 jobs 4549985 / 4549989, 9 h 57 min / 9 h 26 min; comparisons 4549986–88, 4549990–92, 24–35 min)
+Same settings as G7.
+
+| Model (5 seeds, mean ± std) | GLDv2 val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|
+| GLDv2 Stage 1 | 63.01 ± 0.16 | 47.93 ± 1.90 | 24.88 ± 2.93 | 74.22 ± 1.44 | 54.73 ± 0.58 |
+| + FastAP continuation | 62.83 ± 0.15 | 48.07 ± 1.59 | 24.64 ± 2.15 | 74.17 ± 1.09 | 54.48 ± 1.06 |
+| + softmax control (bank) | 64.13 ± 0.09 | 48.44 ± 1.84 | 23.97 ± 3.30 | 73.78 ± 1.18 | 54.92 ± 1.08 |
+| **+ PL RL (AP@100 reward)** | **64.77 ± 0.14** | **52.15 ± 1.10** | **27.66 ± 1.56** | **76.19 ± 1.10** | **56.97 ± 1.05** |
+
+Paired differences over 5 seeds, mean ± std (paired t), and the smallest per-seed difference:
+
+| Comparison | GLDv2 val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|
+| PL − FastAP | +1.94 ± 0.11 | **+4.08 ± 1.74** (t 5.3; min +2.43) | +3.02 ± 1.79 (t 3.8; min +0.70) | **+2.03 ± 0.38** (t 11.9; min +1.55) | +2.49 ± 0.86 (t 6.5; min +1.62) |
+| PL − softmax | +0.64 ± 0.11 | **+3.71 ± 0.91** (t 9.1; min +2.31) | +3.69 ± 2.42 (t 3.4; min +1.00) | **+2.42 ± 0.57** (t 9.5; min +1.55) | +2.05 ± 0.53 (t 8.6; min +1.28) |
+| PL − Stage 1 | +1.76 ± 0.12 | +4.22 ± 1.64 | +2.78 ± 2.06 (min −0.26) | +1.97 ± 0.63 | +2.24 ± 0.71 |
+| softmax − Stage 1 | +1.12 ± 0.17 | +0.51 ± 2.24 | −0.91 ± 2.06 | −0.45 ± 0.98 | +0.19 ± 0.87 |
+| FastAP − Stage 1 | −0.18 ± 0.04 | +0.14 ± 0.87 | −0.24 ± 1.79 | −0.06 ± 0.57 | −0.25 ± 0.85 |
+
+- **The G7 result holds on 5 seeds.** PL RL beats both matched controls in all 5 seeds on all four benchmark protocols (every per-seed difference positive; smallest +0.70 on ROxford Hard vs FastAP). The §5 success criterion is met on 5 seeds.
+- Neither control moves the benchmarks (softmax improves GLDv2 val only; FastAP continuation is flat), so the gain is specific to the reward.
+- Records: `results/runs/gcmp_{pl,sm,ml}_*_seed{42,1,2,3,4}/`, `results/runs/g_s1_b128_lr1e-4_seed*/`.
+
 ### G7. GLDv2: PL RL vs controls, 3 seeds with final evaluation (jobs 4543826–4543834, 25–36 min each)
 Init: GLDv2 Stage 1 seeds 42 / 1 / 2 (seeds 1–2: jobs 4542597–98, 9 h 43 min each). Settings fixed from the seed-42 val pilot (G6b): PL RL and softmax at τ 0.05, lr 1e-6; FastAP continuation at lr 1e-5; batch 128, 512 px, 2 × 1,432 batches, bank 4,096, no anchor. Selection on GLDv2 val; benchmarks scored once on the selected checkpoint (official scoring, long side 1024).
 
