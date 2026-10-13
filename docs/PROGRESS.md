@@ -34,6 +34,30 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - **Split (seed 0):** train 1,546,857 images / 79,813 landmarks; val 21,285 images / 1,500 held-out landmarks (≥ 4 images each, at most 30 kept). No landmark is in both splits.
 - **Caveat:** GLDv2 may contain Oxford/Paris landmarks; standard practice, to be stated in any write-up.
 
+### G10. PL RL vs AP-surrogate controls on the same bank, 5 seeds (jobs 4553898–4553907, 32–37 min each) — **the G7/G8 claim does not hold**
+Smooth-AP (sigmoid τ 0.05, lr 3e-7) and FastAP on the bank (lr 3e-7), selected on the seed-42 pilot (G9), same batches, bank, budget and selection as PL RL.
+
+| Model (5 seeds, mean ± std) | GLDv2 val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|
+| GLDv2 Stage 1 | 63.01 ± 0.16 | 47.93 ± 1.90 | 24.88 ± 2.93 | 74.22 ± 1.44 | 54.73 ± 0.58 |
+| + FastAP continuation, no bank (G8 control) | 62.83 ± 0.15 | 48.07 ± 1.59 | 24.64 ± 2.15 | 74.17 ± 1.09 | 54.48 ± 1.06 |
+| + softmax, bank | 64.13 ± 0.09 | 48.44 ± 1.84 | 23.97 ± 3.30 | 73.78 ± 1.18 | 54.92 ± 1.08 |
+| + Smooth-AP, bank | 64.60 ± 0.06 | 52.36 ± 2.12 | 28.06 ± 2.48 | 76.19 ± 0.99 | 56.99 ± 0.89 |
+| **+ FastAP, bank** | **65.10 ± 0.07** | **52.63 ± 2.44** | **28.78 ± 3.49** | **76.88 ± 0.94** | **57.72 ± 0.87** |
+| + PL RL (AP@100 reward), bank | 64.77 ± 0.14 | 52.15 ± 1.10 | 27.66 ± 1.56 | 76.19 ± 1.10 | 56.97 ± 1.05 |
+
+Paired differences over 5 seeds, mean ± std (t):
+
+| Comparison | GLDv2 val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|
+| PL − FastAP-bank | −0.33 ± 0.10 (−7.5) | −0.48 ± 1.83 (−0.6) | −1.12 ± 2.40 (−1.0) | −0.68 ± 0.41 (−3.8) | −0.74 ± 0.46 (−3.6) |
+| PL − Smooth-AP | +0.17 ± 0.09 (4.1) | −0.21 ± 1.66 (−0.3) | −0.40 ± 1.79 (−0.5) | −0.00 ± 0.25 | −0.01 ± 0.23 |
+| FastAP-bank − Stage 1 | +2.09 ± 0.09 | +4.70 ± 0.93 | +3.90 ± 1.29 | +2.65 ± 0.79 | +2.99 ± 0.58 |
+
+- **The G7/G8 gain was a bank effect, not a reward effect.** Once the differentiable AP surrogates use the same bank, they match (Smooth-AP) or beat (FastAP on the bank: better on RParis in every seed, t ≈ −3.7) the PL RL policy. The G8 controls were too weak: the FastAP control had no bank, and the softmax objective transfers poorly to the benchmarks. **The §5 criterion is not met against the strongest matched control.**
+- **Long-RL preview** (job 4553037, 4× budget, seed 42): GLDv2 val 64.48; ROxf M/H 52.82 / 27.34, RPar M/H 74.65 / 55.31, vs 64.61 / 51.93 / 26.89 / 74.51 / 55.28 at 1×. No meaningful change.
+- **What is established:** (1) GLDv2-clean Stage 1 + a bank-based AP objective is a strong recipe (+4.7 ROxf M, +2.7 RPar M over Stage 1 for FastAP-bank, every seed); (2) PL RL with an AP reward reaches the level of AP surrogates on the same bank, but does not exceed them.
+
 ### G9. Stronger differentiable controls and a longer RL run (submitted 2026-10-13)
 - **Why:** a reviewer's first question is whether any differentiable AP loss on the same setup matches PL RL. Two AP surrogates were added to `RLTrainer`, using the same all-vs-all batches and 4,096-entry bank:
   - `smoothap_control`: Smooth-AP (Brown et al., ECCV 2020), sigmoid temperature = `pl_tau`. CPU check: at a vanishing temperature it equals exact AP (1 − AP 0.6892 vs 0.6891).
@@ -52,7 +76,7 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - **On validation, FastAP with the bank beats PL RL (65.05 vs 64.61), and Smooth-AP ties (64.56).** The G7/G8 FastAP control had no bank, so part or all of the PL advantage there may come from the bank rather than the reward. Validation gains have not always transferred to the benchmarks (the softmax control gained +1.1 val and nothing on ROxford/RParis), so the benchmarks decide.
 - **Submitted:** both controls at their best setting on all 5 seeds with final evaluation (jobs 4553898–4553907; `gcmp_fapb_lr3e-7_seed*`, `gcmp_sap_t0.05_lr3e-7_seed*`).
 
-### G8. GLDv2: PL RL vs controls, 5 seeds (adds seeds 3–4: Stage 1 jobs 4549985 / 4549989, 9 h 57 min / 9 h 26 min; comparisons 4549986–88, 4549990–92, 24–35 min)
+### G8. GLDv2: PL RL vs controls, 5 seeds (superseded by G10: these controls lacked the bank) (adds seeds 3–4: Stage 1 jobs 4549985 / 4549989, 9 h 57 min / 9 h 26 min; comparisons 4549986–88, 4549990–92, 24–35 min)
 Same settings as G7.
 
 | Model (5 seeds, mean ± std) | GLDv2 val | ROxf M | ROxf H | RPar M | RPar H |
