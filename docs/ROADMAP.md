@@ -72,7 +72,7 @@ Update 2026-10-12: moving training to GLDv2-clean (SfM-120k train was saturated)
 
 ### Research stage E — Dataset scale and transfer
 
-Status: planned; data availability/storage feasibility not yet verified.
+Status: in progress (updated 2026-10-14). GLDv2 train downloaded (500 tars, md5-verified) and GLDv2-clean packed with a held-out 1,500-landmark val split; GLDv2-clean Stage 1 trained on 5 seeds (ROxf M 47.9, RPar M 74.2); a noisy-label pool (20k landmarks, 797k images) built for Track N. R1M and the official GLDv2 retrieval evaluation are not done yet. Evidence: PROGRESS G1–G10, N0–N2.
 
 - Keep SfM-120k as the controlled setting. Add GLDv2-clean training, initially via a fixed documented subset if needed, and scale only after cost estimation.
 - Evaluate the strongest models on ROxford/RParis with R1M distractors. Add official GLDv2 retrieval evaluation if preparation fits the budget.

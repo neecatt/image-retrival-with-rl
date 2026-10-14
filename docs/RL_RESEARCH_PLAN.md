@@ -52,10 +52,11 @@ Reason: SfM-120k train is saturated for Stage 1 (A0, A0b, B0), so no reward comp
   - [x] N1b noisy-label Stage 1 done: val 53.21; ROxf M/H 35.68 / 16.85, RPar M/H 62.05 / 40.88
   - [x] N1c batched verifier done: 87.9 pairs/s, AUC 0.824 (2,048-kpt oracle 0.829); match threshold ~35 inliers.
   - [ ] N1d round-based trainer written and CPU-tested (`training/verified_rounds.py`, `scripts/train_verified.py`): per round embed the pool, pick k = 10 candidates per query (rl: PL sample from the top-100 at tau 0.05; remine: greedy; static: initial model's greedy, whole budget in round 0), verify uncached pairs, train on verified query lists (match = >= 35 inliers; unknown same-label items masked) with PL policy gradient (rl) or FastAP (controls). Default budget 4 rounds x 10,000 queries x 10 = 400k verified pairs per arm. GPU smoke runs passed (PROGRESS N1d)
-  - [ ] N2 seed-42 pilot of all four arms at two lrs submitted (4560131–38)
+  - [x] N2 first pilot (4560131–36) OOM-killed while embedding the pool (16 RANSAC workers forked after CUDA + 12 loaders > 92 GB). Noisy-label FastAP-bank control finished: val 55.38 (lr 1e-6) / 55.32 (lr 3e-7), init 53.21
+  - [ ] N2b redesigned pilot after the 2026-10-14 research review: acquisition {greedy, sample, static, replay} x objective {fastap, pl}; replay = FastAP trained on exactly the pairs the RL arm verified; failed same-label verifications treated as uncertain. Full-pool memory smoke 4561437, then 4561438–41, 4561443 (static), 4561444 (replay, after the RL arm). LR fixed from the GLDv2 pilots: PL 1e-6, FastAP 3e-7
   - [ ] N1e "perfect cleaning" reference: Stage 1 on only the GLDv2-clean images of the same 20,000 landmarks, matched step count (job 4559935)
   - Noisy-label control (FastAP-bank on the noisy labels, same steps) runs through the existing finetune_job.sh path
-- [ ] G9b Best control vs PL on 5 seeds; budget study (RL and strongest control at the same longer budget)
+- [x] ~~G9b Best control vs PL on 5 seeds~~ superseded: done as G10 (see entry above); a matched longer-budget study is still open
 - [ ] G9c Ablations (τ, reward k, budget, stronger controls: Smooth-AP / Recall@k surrogate on the same bank), R1M distractors, multi-scale, second backbone (DINOv2)
 - Caveat to report: GLDv2 may contain Oxford/Paris landmarks; training on GLDv2-clean for ROxford/RParis is standard practice (DELG, CVNet, SuperGlobal) but must be stated
 
