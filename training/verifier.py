@@ -38,20 +38,30 @@ def _ransac(args):
     return int(mask.sum()) if mask is not None else 0
 
 
+def _pool_fn():
+    from ransac_worker import ransac_inliers   # scripts/ransac_worker.py, importable by forked workers
+    return ransac_inliers
+
+
 class Verifier:
     def __init__(self, image_root: str, rel_paths: Sequence[str], device, max_kpts: int = 1024,
                  resize: int = 512, batch: int = 32, cpu_workers: int = 16, io_threads: int = 16,
-                 feature_cache: int = 100_000):
+                 feature_cache: int = 100_000, pool=None):
         self.root, self.paths, self.dev = Path(image_root), rel_paths, device
         self.M, self.resize, self.batch, self.cache_cap = int(max_kpts), int(resize), int(batch), int(feature_cache)
         self.extractor = ALIKED(max_num_keypoints=self.M, detection_threshold=1e-6).eval().to(device)
         self.matcher = LightGlue(features='aliked', depth_confidence=-1, width_confidence=-1).eval().to(device)
         self.feats: Dict[int, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = {}
         self.io = ThreadPoolExecutor(io_threads)
-        self.pool = Pool(cpu_workers)
+        # pass a pool forked before torch/CUDA were loaded to keep worker memory small
+        self.own_pool = pool is None
+        self.pool = pool if pool is not None else Pool(cpu_workers)
+        self.ransac = _ransac if pool is None else _pool_fn()
 
     def close(self):
-        self.pool.close(); self.io.shutdown()
+        if self.own_pool:
+            self.pool.close()
+        self.io.shutdown()
 
     def _load(self, i: int):
         return i, numpy_image_to_torch(np.asarray(Image.open(self.root / self.paths[i]).convert('RGB')))
@@ -89,7 +99,7 @@ class Verifier:
             for b, k in enumerate(g):
                 sel = m0[b] > -1
                 kp_jobs[k] = (d0['keypoints'][b][sel].cpu().numpy(), d1['keypoints'][b][m0[b][sel]].cpu().numpy())
-        inl = self.pool.map(_ransac, [kp_jobs[k] for k in range(len(pairs))], chunksize=16)
+        inl = self.pool.map(self.ransac, [kp_jobs[k] for k in range(len(pairs))], chunksize=16)
         return np.asarray(inl, dtype=np.int64)
 
 
