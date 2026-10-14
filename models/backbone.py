@@ -211,6 +211,42 @@ class EfficientNetBackbone(nn.Module):
         return self.features(x)
 
 
+class DINOv2Backbone(nn.Module):
+    """DINOv2 ViT (Oquab et al. 2023, Apache-2.0 weights via timm), returning patch tokens as a
+    (B, C, H/14, W/14) feature map so the same GeM pooling and projection apply as for ResNets.
+    Any input size works (dynamic position-embedding interpolation and padding to a multiple of 14).
+    Weights come from the Hugging Face cache (HF_HOME); compute nodes should set HF_HUB_OFFLINE=1."""
+
+    TIMM_NAMES = {'dinov2_vits14': 'vit_small_patch14_dinov2.lvd142m',
+                  'dinov2_vitb14': 'vit_base_patch14_dinov2.lvd142m',
+                  'dinov2_vitl14': 'vit_large_patch14_dinov2.lvd142m'}
+
+    def __init__(self, architecture: str = 'dinov2_vitb14', pretrained: bool = True):
+        super().__init__()
+        import timm
+        # suffix _cls: return the CLS token as a 1x1 map (pooling then just passes it through);
+        # otherwise patch tokens as a feature map for GeM (ViT tokens can be negative, GeM clamps them)
+        self.use_cls = architecture.endswith('_cls')
+        architecture = architecture[:-4] if self.use_cls else architecture
+        if architecture not in self.TIMM_NAMES:
+            raise ValueError(f"Unknown DINOv2 variant: {architecture}")
+        self.vit = timm.create_model(self.TIMM_NAMES[architecture], pretrained=pretrained, num_classes=0,
+                                     dynamic_img_size=True, dynamic_img_pad=True)
+        self.patch = self.vit.patch_embed.patch_size[0]
+        self.prefix = self.vit.num_prefix_tokens
+        self.feature_dim = self.vit.embed_dim
+        print(f"Initialized {architecture} backbone (pretrained={pretrained})")
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, _, H, W = x.shape
+        h, w = -(-H // self.patch), -(-W // self.patch)
+        out = self.vit.forward_features(x)
+        if self.use_cls:
+            return out[:, 0, :, None, None]                          # (B, C, 1, 1)
+        tok = out[:, self.prefix:]                                   # (B, h*w, C)
+        return tok.transpose(1, 2).reshape(B, -1, h, w)
+
+
 def get_backbone(
     architecture: str = 'resnet50',
     pretrained: bool = True,
@@ -238,6 +274,10 @@ def get_backbone(
         backbone = ResNetBackbone(architecture, pretrained, **kwargs)
         return backbone, backbone.feature_dim
     
+    elif architecture.startswith('dinov2'):
+        backbone = DINOv2Backbone(architecture, pretrained)
+        return backbone, backbone.feature_dim
+
     elif 'efficientnet' in architecture:
         backbone = EfficientNetBackbone(architecture, pretrained)
         return backbone, backbone.feature_dim

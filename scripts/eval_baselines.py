@@ -29,6 +29,11 @@ NORM = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
 
 def build_model(spec, device):
+    if spec.startswith('pretrained:'):      # e.g. pretrained:dinov2_vitb14 (off-the-shelf, no projection)
+        arch = spec.split(':', 1)[1]
+        m = EmbeddingNet(architecture=arch, pretrained=True, pooling='gem', embedding_dim=None,
+                         normalize_embeddings=True, pooling_kwargs={'p': 3.0})
+        return m.to(device).eval()
     if spec == 'imagenet':
         m = EmbeddingNet(architecture='resnet50', pretrained=True, pooling='gem',
                          embedding_dim=None, normalize_embeddings=True, pooling_kwargs={'p': 3.0})
