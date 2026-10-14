@@ -33,5 +33,5 @@ RL on top of the best surrogate model gives nothing (G11: +0.06 val vs continued
 
 ## Before any submission
 - Fix the historical claims in README.md (preliminary, test-selected results).
-- Recheck novelty against RELER and recent RL-for-retrieval papers; check venue deadlines on official sites.
+- Recheck novelty against RELER, ELVA (arXiv 2606.20280, ECCV 2026), Retrieval-GRPO and recent RL-for-retrieval papers; check venue deadlines on official sites.
 - Push to a Git remote (none configured yet); the user decides where.

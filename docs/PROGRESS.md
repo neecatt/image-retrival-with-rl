@@ -14,7 +14,7 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 
 These are review recommendations, not completed fixes or authorization to submit new jobs. No model/data changes were made.
 
-## Open problems (as of 2026-10-10)
+## Open problems (dated snapshot, 2026-10-10; later status in the entries below)
 
 | # | Problem | Why it matters | Status |
 |---|---|---|---|
@@ -23,7 +23,7 @@ These are review recommendations, not completed fixes or authorization to submit
 | P3 | Checkpoint selection signal is weak: "validation reward" is mAP inside each batch of 8 (gallery of ~4 images), close to 1.0 | Cannot reliably pick the best epoch | Fixed (F5), verified in smoke run 4515494 |
 | P4 | README Stage 1 numbers (16.97 Medium / 3.59 Hard) do not match a rerun of `stage1_epoch_13_best.pth` (18.29 / 9.33 with the old scoring) | Historical results cannot be reproduced as stated | Likely a different checkpoint or older code. The run folders on tinyx have not been copied yet |
 | P5 | Policy gradient norm is 100–300 vs 0.06–0.08 for the consistency term; `gradient_clip: 1.0` clips 90–100% of steps | The consistency regulariser has no practical effect; updates are clipped to unit norm every step | Measured (B2). Addressed together with P2 |
-| P6 | Gallery embeddings are sampled but receive no policy gradient; memory-bank entries come from older parameters | The objective is "query-only, given a noisy gallery", not full expected AP | Acceptable if stated explicitly in the paper; not changed |
+| P6 | Gallery embeddings are sampled but receive no policy gradient; memory-bank entries come from older parameters | The objective is "query-only, given a noisy gallery", not full expected AP | Superseded for the PL path (E1): batch gallery items receive gradient through the PL scores; bank entries are still older detached means |
 
 ### B0. Track B headroom check before building (CPU, 2026-10-11; `scripts/analysis/trackb_headroom.py` on the A0/A0b pairs)
 Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Measured on the same seed-42 Stage 1 shortlists as A0/A0b (binary SfM labels; AP@20 is low in absolute terms because clusters have many more than 20 positives).
@@ -38,6 +38,17 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 - **Decision: Track B is not built on SfM-120k.** Like A0/A0b, the limit is the training data, not the algorithm: Stage 1 has fitted SfM-120k train, so any reward computed there is near its ceiling. A reward-tuning gain needs a training pool the model cannot fit, e.g. GLDv2 (≈ 4M images, noisy labels; its "clean" subset was itself built by local-feature verification).
 
 ## 2026-10-13: Track N, verifier-in-the-loop RL on noisy full GLDv2
+
+### N2. First full Track N pilot failed (OOM); redesign after the research review (2026-10-14)
+- **Jobs 4560131–4560136 (rl / remine / static at two lrs) were OOM-killed** after ~23 min, while embedding the 797k pool in round 1 (MaxRSS 86.7 GB of 92). Cause: 16 RANSAC workers forked after torch/CUDA were loaded, plus 12 loader workers. Fix: the RANSAC pool is forked at program start from a light module (`scripts/ransac_worker.py`), and loader workers are 8. A full-pool smoke run (job 4561437) checks memory before the pilot starts.
+- **Noisy-label control finished** (FastAP-bank on the noisy labels, 2 × 1,432 steps, jobs 4560137–38): GLDv2 val 53.21 → **55.38** (lr 1e-6) / **55.32** (lr 3e-7).
+- **Research review (top of this file), how it is handled:**
+  - *Separate acquisition and optimisation:* done. Arms are now acquisition {greedy, sample, static, replay} × objective {fastap, pl}. The pilot runs greedy×fastap, greedy×pl, sample×fastap, sample×pl (the RL arm), static×fastap, and **replay×fastap = FastAP trained on exactly the lists and verified pairs the RL arm collected**. An RL gain counts only if sample×pl beats sample×fastap and replay×fastap; adaptive labels alone are credited to acquisition.
+  - *Failed verification ≠ wrong label:* done. Failed same-label pairs are now uncertain (masked) instead of negatives; only failed pairs with a different label are negatives. Manual calibration of the 35-inlier threshold on reviewed easy/hard/confusable pairs is still open.
+  - *Unique verifier calls, cache hits and compute* are logged per round (`budget_used`, minutes); a summary table will be produced with the results.
+  - *Locked evaluation:* the next claim should be reported on R1M and on held-out landmark identities, not only on ROxford/RParis, which have been inspected many times. Planned for the final Track N evaluation.
+  - *PPO caveats:* not using PPO; noted for later. *Literature:* ELVA (ECCV 2026) added to the novelty check list in PAPER_DRAFT.md.
+  - *Documentation follow-ups:* P6 labelled superseded; ROADMAP Stage E status updated; stale G9b entry marked superseded.
 
 ### N1d. Verifier-in-the-loop trainer: GPU smoke runs (jobs 4559965–4559967, 7–8 min each)
 30,000-image slice, 2 rounds × 400 queries × 10 candidates, 30 training steps per round. All three arms ran end to end. Verifier throughput inside the loop ~140 pairs/s (cache + batching); budgets equal (rl 7,960, remine 7,913, static 7,936 verified pairs). 55–66% of queries have at least one verified match among their 10 candidates. Val unchanged (53.21 → 53.29–53.41), as expected for 60 steps.
