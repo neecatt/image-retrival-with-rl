@@ -3,16 +3,12 @@ Round-based training with a geometric verifier in the loop (Track N, docs/RL_RES
 
 Each round: embed the pool with the current model, choose k candidates for a set of queries,
 verify the (query, candidate) pairs that are not cached yet, then train on query lists whose
-relevance comes from the verifier. Arms differ only in how candidates are chosen and the objective:
-  rl      candidates = Plackett-Luce sample (Gumbel top-k) from the top-`shortlist` scores at
-          temperature tau; objective = PL policy gradient with AP@k reward
-  remine  candidates = greedy top-k of the current model; objective = FastAP
-  static  candidates = greedy top-k of the initial model, all verified in round 0 with the same
-          total verifier budget; objective = FastAP
-Within a batch, a query's relevance to every item is: verified match (inliers >= threshold) if the
-pair is in the cache, otherwise unknown. Unknown items with the query's noisy label are masked
-(they may be matches); unknown items with another label are negatives. Memory-bank items follow
-the same rule. Only queries are anchors.
+relevance comes from the verifier. Acquisition (greedy / PL-sampled / static / replay) and objective
+(PL policy gradient with AP@k reward, or FastAP) are separate factors; see scripts/train_verified.py.
+Within a batch, a query's relevance to every item is: verified match (inliers >= threshold) ->
+positive; otherwise, items with the query's noisy label are uncertain and masked (failed
+verification only shows missing geometric support, not a wrong label), and items with another
+label are negatives. Memory-bank items follow the same rule. Only queries are anchors.
 """
 
 import random
@@ -87,9 +83,10 @@ def relevance(q_ids: Sequence[int], item_ids: Sequence[int], labels: np.ndarray,
                 valid[a, b] = False
                 continue
             c = cache.get(q, it)
-            if c >= 0:
-                rel[a, b] = c >= threshold
-            elif lab_items[b] == labels[q]:
+            same = lab_items[b] == labels[q]
+            if c >= threshold:
+                rel[a, b] = True
+            elif same:                 # unverified or failed with the same noisy label: uncertain
                 valid[a, b] = False
     return rel, valid
 

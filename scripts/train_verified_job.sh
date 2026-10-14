@@ -7,7 +7,8 @@
 #SBATCH --error=logs/verified-%j.err
 #SBATCH --export=NONE
 # Track N1d: verifier-in-the-loop rounds on the noisy GLDv2 pool.
-# Usage: sbatch scripts/train_verified_job.sh RUN ARM INIT [args for train_verified.py] [--final-eval]
+# Usage: sbatch scripts/train_verified_job.sh RUN LABEL INIT --acquisition A --objective O [args] [--final-eval]
+# LABEL is only recorded in jobs.txt.
 set -euo pipefail
 unset SLURM_EXPORT_ENV
 module load python/3.12-base
@@ -25,7 +26,7 @@ echo "$SLURM_JOB_ID $(date -Is) $(git rev-parse HEAD) arm=$ARM init=$INIT" >> "$
 git diff > "$OUT/git_diff_${SLURM_JOB_ID}.patch"
 DATASETS=(gldv2n); [ "$FINAL" = 1 ] && DATASETS+=(roxford5k rparis6k)
 python scripts/stage_datasets.py "${DATASETS[@]}"
-python scripts/train_verified.py --arm "$ARM" --init "$INIT" --data_root "$TMPDIR/data/raw" \
+python scripts/train_verified.py --init "$INIT" --data_root "$TMPDIR/data/raw" \
     --out "$OUT" --ckpt_dir "$CKPT" "${ARGS[@]}" 2>&1 | grep -v "it/s\]\|s/it\]"
 if [ "$FINAL" = 1 ]; then
     python scripts/eval_baselines.py --data_root "$TMPDIR/data/raw" --out "$OUT/final_eval.json" \
