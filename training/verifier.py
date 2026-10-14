@@ -46,7 +46,7 @@ def _pool_fn():
 class Verifier:
     def __init__(self, image_root: str, rel_paths: Sequence[str], device, max_kpts: int = 1024,
                  resize: int = 512, batch: int = 32, cpu_workers: int = 16, io_threads: int = 16,
-                 feature_cache: int = 100_000, pool=None):
+                 feature_cache: int = 60_000, pool=None):
         self.root, self.paths, self.dev = Path(image_root), rel_paths, device
         self.M, self.resize, self.batch, self.cache_cap = int(max_kpts), int(resize), int(batch), int(feature_cache)
         self.extractor = ALIKED(max_num_keypoints=self.M, detection_threshold=1e-6).eval().to(device)
@@ -71,14 +71,23 @@ class Verifier:
         todo = [i for i in dict.fromkeys(idx) if i not in self.feats]
         if len(self.feats) + len(todo) > self.cache_cap:
             self.feats.clear()
-        for i, img in self.io.map(self._load, todo):
-            f = self.extractor.extract(img.to(self.dev), resize=self.resize)
-            self.feats[i] = (f['keypoints'][0], f['descriptors'][0].half(), f['image_size'][0])
+        # Load in small chunks: Executor.map submits everything at once, and decoded images would
+        # pile up in host memory (~2.5 MB each) faster than the GPU extracts features.
+        for s in range(0, len(todo), 256):
+            for i, img in self.io.map(self._load, todo[s:s + 256]):
+                f = self.extractor.extract(img.to(self.dev), resize=self.resize)
+                self.feats[i] = (f['keypoints'][0], f['descriptors'][0].half(), f['image_size'][0])
 
     @torch.no_grad()
-    def verify(self, pairs: Sequence[Tuple[int, int]]) -> np.ndarray:
-        """Inlier count for each (i, j) pair."""
+    def verify(self, pairs: Sequence[Tuple[int, int]], chunk: int = 5000) -> np.ndarray:
+        """Inlier count for each (i, j) pair, processed in chunks to bound host memory."""
         pairs = list(pairs)
+        if len(pairs) > chunk:
+            return np.concatenate([self._verify(pairs[s:s + chunk]) for s in range(0, len(pairs), chunk)])
+        return self._verify(pairs)
+
+    @torch.no_grad()
+    def _verify(self, pairs: List[Tuple[int, int]]) -> np.ndarray:
         if not pairs:
             return np.zeros(0, dtype=np.int64)
         self._extract([x for p in pairs for x in p])
