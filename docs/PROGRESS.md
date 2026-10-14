@@ -39,6 +39,11 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 
 ## 2026-10-13: Track N, verifier-in-the-loop RL on noisy full GLDv2
 
+### N2b. Second OOM, root cause fixed; "perfect cleaning" reference (2026-10-14)
+- **Jobs 4561438–4561443 OOM-killed again** after ~23 min, this time while verifying round 1 (100k pairs). Root cause in `Verifier._extract`: `ThreadPoolExecutor.map` submitted all ~100k image decodes at once, and decoded images (~2.5 MB each) piled up in host memory faster than the GPU extracted features. The 300-query smoke run (4561437) only loaded ~3k images, so it missed this. Fix: load 256 images at a time and verify in chunks of 5,000 pairs (identical results on a CPU test). The replay job 4561444 was cancelled (dependency never satisfied).
+- **Resubmitted:** full-scale smoke run (1 round, 10,000 queries, 100k pairs; job 4570353), then the same pilot chain (4570354–58, replay 4570359).
+- **"Perfect cleaning" reference finished** (job 4559935, 5 h 10 min): Stage 1 on only the GLDv2-clean images of the same 20,000 landmarks, matched step count. GLDv2 val **56.82**; ROxf M/H **44.10 / 21.42**; RPar M/H **65.12 / 45.35**. For comparison, the noisy-label Stage 1 reaches 53.21; 35.68 / 16.85; 62.05 / 40.88. So perfect label cleaning is worth +3.6 val, +8.4 / +4.6 ROxford and +3.1 / +4.5 RParis at the Stage 1 level. That is the headroom a verifier-based method can close.
+
 ### N2. First full Track N pilot failed (OOM); redesign after the research review (2026-10-14)
 - **Jobs 4560131–4560136 (rl / remine / static at two lrs) were OOM-killed** after ~23 min, while embedding the 797k pool in round 1 (MaxRSS 86.7 GB of 92). Cause: 16 RANSAC workers forked after torch/CUDA were loaded, plus 12 loader workers. Fix: the RANSAC pool is forked at program start from a light module (`scripts/ransac_worker.py`), and loader workers are 8. A full-pool smoke run (job 4561437) checks memory before the pilot starts.
 - **Noisy-label control finished** (FastAP-bank on the noisy labels, 2 × 1,432 steps, jobs 4560137–38): GLDv2 val 53.21 → **55.38** (lr 1e-6) / **55.32** (lr 3e-7).
