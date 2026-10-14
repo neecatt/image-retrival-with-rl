@@ -68,9 +68,11 @@ class Verifier:
 
     @torch.no_grad()
     def _extract(self, idx: List[int]):
-        todo = [i for i in dict.fromkeys(idx) if i not in self.feats]
+        need = list(dict.fromkeys(idx))
+        todo = [i for i in need if i not in self.feats]
         if len(self.feats) + len(todo) > self.cache_cap:
-            self.feats.clear()
+            self.feats.clear()          # everything this call needs must be extracted again
+            todo = need
         # Load in small chunks: Executor.map submits everything at once, and decoded images would
         # pile up in host memory (~2.5 MB each) faster than the GPU extracts features.
         for s in range(0, len(todo), 256):
