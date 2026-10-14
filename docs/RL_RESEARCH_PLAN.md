@@ -61,6 +61,13 @@ Reason: SfM-120k train is saturated for Stage 1 (A0, A0b, B0), so no reward comp
 - [ ] G9c Ablations (τ, reward k, budget, stronger controls: Smooth-AP / Recall@k surrogate on the same bank), R1M distractors, multi-scale, second backbone (DINOv2)
 - Caveat to report: GLDv2 may contain Oxford/Paris landmarks; training on GLDv2-clean for ROxford/RParis is standard practice (DELG, CVNet, SuperGlobal) but must be stated
 
+**Program after Track N (user decision 2026-10-15: continue until RL is demonstrably beneficial)**
+Lesson so far: when RL's reward is computable from per-pair labels that a differentiable loss can also use, a matched AP surrogate ties it (G10, N3). Remaining directions either change the model (D), or apply RL where the decision is sequential/set-valued and no per-pair label defines the target (V, Q, B).
+- **Track D: second backbone (DINOv2 ViT-B/14, 87M params, Apache-2.0).** Off-the-shelf evaluation (job 4575620) and GLDv2-clean Stage 1 pilot GeM-vs-CLS × lr 1e-5 / 3e-6 at 448 px (4575621–24). Then PL RL vs FastAP-bank / Smooth-AP on 5 seeds, as in G10. A stronger, differently pretrained model may respond differently to the reward.
+- **Track V: RL for budgeted verification (re-ranking scheduler).** With a fixed descriptor, a policy picks which shortlist items to spend a limited verifier budget on (sequential, non-differentiable decisions). Reward = AP after re-ranking. Baselines: verify top-B by similarity, a supervised "will-verify" classifier, uncertainty heuristics. RL is the natural tool here, and the comparison is against good heuristics rather than an equivalent surrogate. Evaluate on ROxford/RParis (+R1M) at several budgets.
+- **Track Q: RL query expansion.** A policy chooses which top-ranked neighbours to aggregate into the expanded query (set-valued action; the reward is AP of the second retrieval, which depends on the whole set). Baselines: alpha-QE / AQE / DBA tuned on validation, and learned attention QE (LAttQE).
+- **Track B (GLDv2): pipeline reward for the descriptor.** AP after verifier re-ranking of the top-K shortlist as the reward on GLDv2 (headroom exists there, G5), against a Recall@K surrogate with verified labels.
+
 **Later**
 - [ ] ~~Phase 2 main experiment~~ dropped: no arm passed the 2.5 gate
 - [ ] 3.0 Hard-positive SfM val metric (level 1–2 positives only) to check that selection can see benchmark-relevant changes
