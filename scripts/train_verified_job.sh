@@ -14,6 +14,7 @@ unset SLURM_EXPORT_ENV
 module load python/3.12-base
 source "$HOME/venvs/rl-env/bin/activate"
 cd "$SLURM_SUBMIT_DIR"
+export HF_HOME=/home/vault/b268dc/b268dc21/hf_cache HF_HUB_OFFLINE=1   # cached DINOv2 weights, no network on nodes
 export PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1
 : "${HPCVAULT:?HPCVAULT must be set}"
 RUN="${1:?RUN}"; ARM="${2:?ARM}"; INIT="${3:?INIT}"; shift 3
