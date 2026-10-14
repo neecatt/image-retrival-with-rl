@@ -39,6 +39,26 @@ Track B reward = AP after the verifier re-ranks the global top-20 shortlist. Mea
 
 ## 2026-10-13: Track N, verifier-in-the-loop RL on noisy full GLDv2
 
+### N3. Track N pilot, seed 42 (jobs 4571069–4571075; full-scale smoke 4571067 passed)
+Init: noisy-label Stage 1 (GLDv2 val 53.21). 4 rounds × 10,000 queries × 10 candidates (≈ 400k unique verified pairs per arm), 4 × 716 training steps, bank 4,096, match = ≥ 35 inliers, failed same-label pairs uncertain. Verification ≈ 140 pairs/s; a verifying round takes ~38 min (mostly embedding the 797k pool and verification). GLDv2 val mAP after each round:
+
+| Acquisition × objective | r1 | r2 | r3 | r4 | best | unique verified pairs |
+|---|---|---|---|---|---|---|
+| greedy × FastAP (re-mining) | 55.05 | 55.74 | **55.99** | 55.78 | 55.99 | 391,164 |
+| greedy × PL RL | 55.33 | 55.76 | 55.61 | **55.91** | 55.91 | 391,859 |
+| sample × FastAP | 55.10 | 55.60 | 55.97 | **56.17** | **56.17** | 398,154 |
+| **sample × PL RL** | 55.35 | 55.75 | 55.97 | **56.07** | 56.07 | 398,201 |
+| static × FastAP | 55.28 | 55.78 | **55.92** | 55.81 | 55.92 | 396,292 |
+| replay of sample×PL lists × FastAP | 54.91 | 55.57 | 55.73 | **55.84** | 55.84 | 398,201 (reused) |
+| *references* | | | | | | |
+| noisy-label FastAP-bank (N2, no verifier) | | | | | 55.38 | 0 |
+| perfect-cleaning Stage 1 (N2b) | | | | | 56.82 | – |
+
+- **The RL objective ties FastAP again.** With the same sampled acquisition, PL RL 56.07 vs FastAP 56.17 (−0.10); with greedy acquisition 55.91 vs 55.99 (−0.08); FastAP trained on exactly RL's verified lists reaches 55.84. **The Track N gate (RL > sample×FastAP and > replay×FastAP by ≥ 0.3) is not met.**
+- **The verifier helps a little.** Every verifier arm beats the noisy-label control (55.38) by +0.5 to +0.8 val, closing roughly a third to a half of the 1.4-point gap to the perfect-cleaning Stage 1. That reference is a from-scratch Stage 1, so this is only a rough scale.
+- **Acquisition matters little at this budget.** Sampled ≥ greedy ≥ static by 0.1–0.2, all within single-seed noise. Sampled arms were still rising at round 4.
+- No seeds run: the RL-specific gate failed, and a +0.5 verifier gain over noisy labels at this budget is not the claim Track N was built for.
+
 ### N2b. Second OOM, root cause fixed; "perfect cleaning" reference (2026-10-14)
 - **Jobs 4561438–4561443 OOM-killed again** after ~23 min, this time while verifying round 1 (100k pairs). Root cause in `Verifier._extract`: `ThreadPoolExecutor.map` submitted all ~100k image decodes at once, and decoded images (~2.5 MB each) piled up in host memory faster than the GPU extracted features. The 300-query smoke run (4561437) only loaded ~3k images, so it missed this. Fix: load 256 images at a time and verify in chunks of 5,000 pairs (identical results on a CPU test). The replay job 4561444 was cancelled (dependency never satisfied).
 - **Resubmitted:** full-scale smoke run (1 round, 10,000 queries, 100k pairs; job 4570353), then the same pilot chain (4570354–58, replay 4570359).
