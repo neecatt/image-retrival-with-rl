@@ -68,6 +68,12 @@ Lesson so far: when RL's reward is computable from per-pair labels that a differ
 - **Track Q: RL query expansion.** A policy chooses which top-ranked neighbours to aggregate into the expanded query (set-valued action; the reward is AP of the second retrieval, which depends on the whole set). Baselines: alpha-QE / AQE / DBA tuned on validation, and learned attention QE (LAttQE).
 - **Track B (GLDv2): pipeline reward for the descriptor.** AP after verifier re-ranking of the top-K shortlist as the reward on GLDv2 (headroom exists there, G5), against a Recall@K surrogate with verified labels.
 
+**Principle (user, 2026-10-15): maximise every baseline honestly before adding RL.**
+- Stage 1 / descriptors are tuned to their best on held-out validation only; if an off-the-shelf model beats a fine-tuned one, it is the baseline. Selection now optionally averages several held-out val sets (`training.extra_val_sets`, e.g. GLDv2-clean val + SfM-120k val) so loss of generality is visible.
+- [ ] M1 DINOv2 Stage 1 tuning grid (jobs 4581055–59): lr 1e-5 / 3e-6 / 1e-6, layer decay 0.65 / 0.75, freezing 4 / 6 blocks, no projection (768-d CLS). Off-the-shelf on SfM val: job 4581054. The best on mean validation becomes the DINOv2 baseline.
+- [ ] M2 ResNet50 GLDv2 Stage 1 with 20 epochs (val was still rising at 10), mean-val selection (job 4581061).
+- [ ] M3 Evaluation upgrades applied equally to all arms: multi-scale testing and learned whitening (fit on training data only).
+
 **Later**
 - [ ] ~~Phase 2 main experiment~~ dropped: no arm passed the 2.5 gate
 - [ ] 3.0 Hard-positive SfM val metric (level 1–2 positives only) to check that selection can see benchmark-relevant changes
