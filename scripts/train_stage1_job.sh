@@ -26,8 +26,9 @@ git diff > "$OUT/git_diff_${SLURM_JOB_ID}.patch"
 pip freeze > "$OUT/pip_freeze.txt"
 
 TRAIN_SET="${TRAIN_SET:-sfm120k}"
-if [ "${SKIP_FINAL_EVAL:-0}" = 1 ]; then python scripts/stage_datasets.py "$TRAIN_SET"
-else python scripts/stage_datasets.py "$TRAIN_SET" roxford5k rparis6k; fi
+# EXTRA_STAGE: extra datasets to stage, e.g. sfm120k for training.extra_val_sets=[sfm120k]
+if [ "${SKIP_FINAL_EVAL:-0}" = 1 ]; then python scripts/stage_datasets.py "$TRAIN_SET" ${EXTRA_STAGE:-}
+else python scripts/stage_datasets.py "$TRAIN_SET" ${EXTRA_STAGE:-} roxford5k rparis6k; fi
 python scripts/make_run_config.py config/config.yaml "$OUT/run_config.yaml" \
     dataset.root_dir="$TMPDIR/data/raw" \
     system.checkpoint_dir="$CKPT" system.log_dir="$OUT/tb" system.results_dir="$OUT" \
