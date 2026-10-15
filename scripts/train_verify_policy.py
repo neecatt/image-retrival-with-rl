@@ -81,6 +81,8 @@ def main():
     ap.add_argument('--batch', type=int, default=128)
     ap.add_argument('--lr', type=float, default=1e-3)
     ap.add_argument('--seeds', type=int, nargs='+', default=[0, 1, 2])
+    ap.add_argument('--hard_mix', type=float, default=0.0, help='weight of the hard-proxy AP in the training reward')
+    ap.add_argument('--easy_inliers', type=int, default=150, help='shortlist positives with >= this many inliers count as easy')
     a = ap.parse_args()
     dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     pre, out = Path(a.pre), Path(a.out); out.mkdir(parents=True, exist_ok=True)
@@ -92,6 +94,13 @@ def main():
     rel_full = (labels[None, :] == labels[qs][:, None]).astype(np.int8)
     rel_full[np.arange(len(qs)), qs] = -1
     gld = build(z['sim_full'], top, z['inliers'], z['cand_sim'], rel_full, K, dev)
+    if a.hard_mix > 0:      # hard proxy: easy shortlist positives become junk (training reward only)
+        rel_h = rel_full.copy()
+        easy = (z['inliers'] >= a.easy_inliers) & (rel_full[np.arange(len(qs))[:, None], top] == 1)
+        for q in range(len(qs)):
+            rel_h[q, top[q][easy[q]]] = -1
+        gh = build(z['sim_full'], top, z['inliers'], z['cand_sim'], rel_h, K, dev)
+        gld['rel_hard'], gld['npos_hard'], gld['ap_tail_hard'] = gh['rel'], gh['npos'], gh['ap_tail']
     lm = labels[qs]
     is_tr = (lm * 2654435761 % 3) != 0                            # landmark-level split, 2/3 train
     tr_idx = torch.tensor(np.where(is_tr)[0], device=dev); va_idx = torch.tensor(np.where(~is_tr)[0], device=dev)
@@ -130,7 +139,7 @@ def main():
                 torch.manual_seed(seed)
                 pol = Policy().to(dev)
                 opt = torch.optim.Adam(pol.parameters(), lr=a.lr)
-                tr = envs['gld_train']
+                tr = VerifyEnv(pools['gld_train'], B, a.threshold, hard_mix=a.hard_mix)
                 best, best_state = -1, None
                 for it in range(a.iters):
                     idx = torch.randint(0, tr.Q, (a.batch,), device=dev)
