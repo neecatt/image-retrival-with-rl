@@ -18,6 +18,26 @@ GLDv2-clean Stage 1 pilot (FastAP, batch 128, 448 px, 3 x 1,000 batches; GLDv2 v
 
 ## 2026-10-15: Track V, RL for budgeted geometric verification
 
+### V3. 10,000 training queries and a hard-proxy reward (precompute 4575824, 51 min; policies 4575827–29, 18 min each)
+Same descriptor and protocol; 10,000 GLDv2-clean val queries → 6,720 policy-train / 3,280 policy-val (landmark split); 3,000 iterations; reward mixed with a hard-proxy AP (shortlist positives with ≥ 150 inliers ignored) at weight 0 / 0.25 / 0.5.
+
+| B | method (hard mix 0) | gld_val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|---|
+| 10 | top-B | 64.22 | 55.76 | 33.07 | 75.47 | 56.46 |
+| 10 | classifier | 64.92 | 56.56 | **33.56** | 75.59 | 56.49 |
+| 10 | value (myopic) | 64.98 | 56.75 | 32.04 | 75.72 | 56.51 |
+| 10 | **RL** | **65.54** | **57.27** | 31.83 | **75.87** | **56.55** |
+| 20 | top-B | 64.76 | 56.83 | 33.95 | 75.61 | 56.54 |
+| 20 | classifier | 65.77 | 58.57 | **34.87** | 75.83 | 56.59 |
+| 20 | value (myopic) | 65.76 | 60.44 | 35.10 | 76.08 | 56.80 |
+| 20 | **RL** | **66.04** | **60.58** | 34.63 | **76.18** | **56.88** |
+
+Paired bootstrap, RL − baseline (hard mix 0): gld_val vs value **+0.56 [+0.45, +0.67]** (B10), **+0.28 [+0.18, +0.38]** (B20); vs classifier **+0.62 / +0.27** (both CIs > 0). RPar M vs value **+0.15 [+0.07, +0.23]** (B10), +0.10 [−0.00, +0.23] (B20); vs classifier +0.28 / +0.35 (CIs > 0). ROxf M vs classifier at B20 **+2.01 [+0.18, +3.49]**; vs value +0.15 (n.s.). ROxf H: −1.7 to −0.2 vs the learned baselines, all CIs include 0.
+
+- **RL's advantage over the myopic value policy is confirmed with 3,280 held-out queries,** but it is small: +0.3 to +0.6 mAP. More training data improved the value baseline most (ROxf M at B20: 59.31 → 60.44), which narrowed RL's lead on the benchmarks.
+- **The hard-proxy reward does not help ROxford Hard** (all three mixes within noise of each other). The "≥ 150 inliers = easy" proxy apparently does not match the Revisited easy/hard split.
+- **Room left:** verifying the whole shortlist reaches ROxf M 64.85 / H 43.10, against ~60.6 / 34.6 at B = 20. Next levers: a policy that looks at the whole shortlist jointly (attention over candidates, for RL and the value baseline alike), larger galleries (R1M) where choosing what to verify matters more, and the DINOv2 descriptor.
+
 ### V2. Myopic value baseline and paired bootstrap over queries (job 4575805, 9 min; `scripts/analysis/trackv_bootstrap.py`)
 New baseline *value*: the same MLP and features, trained to regress the exact one-step AP gain of verifying each item (targets from the ground truth), chosen greedily. It optimises the same final-AP objective as RL but plans one step ahead.
 
