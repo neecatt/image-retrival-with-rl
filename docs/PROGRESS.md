@@ -2,6 +2,32 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+## 2026-10-15: Track V, RL for budgeted geometric verification
+
+### V1. First results (precompute job 4575648, 22 min; policies job 4575657, 8 min)
+Fixed descriptor: GLDv2 FastAP-bank seed 42 (`gcmp_fapb_lr3e-7_seed42`). Top-100 shortlist per query; the method verifies B items one at a time (seeing each outcome), then verified matches (≥ 35 inliers) move to the top by inliers; reward/metric = official AP of the final ranking. Policies are trained on GLDv2-clean val queries of 2/3 of the landmarks (2,041 queries), selected on the other 1/3 (959 queries, "gld_val"), and evaluated once on ROxford/RParis. RL = MLP policy over 10 per-candidate features, REINFORCE with leave-one-out baseline (16 rollouts per query); classifier = same MLP and features trained with BCE to predict a verified match, chosen greedily and adaptively. 3 policy-training seeds each (std ≤ 0.2 except ROxf Hard ≤ 0.7).
+
+| B | method | gld_val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|---|
+| – | none (global ranking) | 64.67 | 54.35 | 30.35 | 75.37 | 56.36 |
+| 5 | top-B by similarity | 65.08 | 55.17 | 32.49 | 75.41 | 56.37 |
+| 5 | classifier | 65.38 | 54.99 | 31.81 | 75.44 | 56.40 |
+| 5 | **RL** | **65.84** | **55.26** | 30.04 | **75.57** | 56.43 |
+| 10 | top-B | 65.62 | 55.76 | 33.07 | 75.47 | 56.46 |
+| 10 | classifier | 66.07 | 56.44 | **33.54** | 75.56 | 56.51 |
+| 10 | **RL** | **66.89** | **57.38** | 31.86 | **75.82** | 56.52 |
+| 20 | top-B | 66.06 | 56.83 | 33.95 | 75.61 | 56.54 |
+| 20 | classifier | 66.89 | 58.22 | **34.76** | 75.78 | 56.58 |
+| 20 | **RL** | **67.27** | **60.17** | 33.76 | **76.17** | **56.87** |
+| 100 | verify all | 65.05 | 64.85 | 43.10 | 76.89 | 57.71 |
+
+RL − classifier per policy seed: gld_val +0.34 to +0.83 (every seed, every budget); ROxf M +0.15 to +2.08 (every seed); RPar M +0.12 to +0.44 (every seed); **ROxf Hard −0.56 to −1.98 (every seed)**; RPar H −0.01 to +0.33.
+
+- **First setting where RL beats its strongest matched non-RL alternative** on the held-out selection split and on ROxford/RParis Medium, at every budget and in every seed. At B = 20, RL improves ROxford Medium by +5.8 over no verification, +3.3 over the standard top-B re-ranking and +2.0 over the adaptive classifier.
+- **But RL is worse on ROxford Hard.** The reward counts every same-landmark image equally, so the policy spends its budget on items whose promotion raises AP the most, which are mostly easy positives (junk under Hard). The classifier, which only predicts "will verify", keeps more hard positives.
+- **Verify-all is not an upper bound on GLDv2** (65.05 < budgeted methods): promoting every verified match also promotes false matches and reorders true positives by inliers. On ROxford it is far above every budgeted method (64.85 Medium), so there is a lot of room.
+- **Caveats:** the policy-seed std understates the real uncertainty, which comes from the 70 benchmark queries (paired bootstrap over queries still to do). Hyperparameters: a single setting, not tuned. Stronger non-RL baseline still to add: a learned myopic value (regress the one-step AP gain of verifying an item, then choose greedily), which separates "RL optimises the final-AP objective" from "RL plans several steps".
+
 ## 2026-10-14: Research review of roadmap and RL plan (no training runs)
 
 - Independently aggregated five `final_eval.json` files per arm from `results/runs/gcmp_fapb_lr3e-7_seed*`, `gcmp_pl_t0.05_lr1e-6_seed*`, and `gcmp_sap_t0.05_lr3e-7_seed*`. G10 means reproduced: FastAP-bank ROxf M/H 52.63/28.78, RPar M/H 76.88/57.72; PL RL 52.15/27.66, 76.19/56.97; Smooth-AP 52.36/28.06, 76.19/56.99. This supports no demonstrated RL advantage on this binary-label setup, not a universal claim that RL cannot help retrieval.
