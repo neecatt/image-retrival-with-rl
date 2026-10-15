@@ -18,6 +18,32 @@ GLDv2-clean Stage 1 pilot (FastAP, batch 128, 448 px, 3 x 1,000 batches; GLDv2 v
 
 ## 2026-10-15: Track V, RL for budgeted geometric verification
 
+### V2. Myopic value baseline and paired bootstrap over queries (job 4575805, 9 min; `scripts/analysis/trackv_bootstrap.py`)
+New baseline *value*: the same MLP and features, trained to regress the exact one-step AP gain of verifying each item (targets from the ground truth), chosen greedily. It optimises the same final-AP objective as RL but plans one step ahead.
+
+| B | method | gld_val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|---|
+| 10 | classifier | 66.07 | 56.44 | 33.54 | 75.56 | 56.51 |
+| 10 | value (myopic) | 65.96 | 56.59 | 33.38 | 75.59 | 56.47 |
+| 10 | RL | **66.89** | **57.38** | 31.86 | **75.82** | 56.52 |
+| 20 | classifier | 66.89 | 58.22 | 34.76 | 75.78 | 56.58 |
+| 20 | value (myopic) | 66.97 | 59.31 | **35.67** | 75.87 | 56.58 |
+| 20 | RL | **67.27** | **60.17** | 33.76 | **76.17** | **56.87** |
+
+Paired bootstrap over queries (10,000 resamples, 95% CI), RL minus baseline:
+
+| B | vs | gld_val (959 q) | ROxf M (70 q) | ROxf H | RPar M (70 q) | RPar H |
+|---|---|---|---|---|---|---|
+| 5 | value | **+0.65 [+0.46, +0.85]** | +0.13 [−1.36, +1.30] | −2.16 [−6.00, +0.68] | **+0.14 [+0.06, +0.26]** | +0.03 [−0.01, +0.09] |
+| 10 | value | **+0.94 [+0.69, +1.21]** | +0.79 [−1.16, +2.41] | −1.52 [−5.79, +1.50] | **+0.23 [+0.10, +0.44]** | +0.05 [−0.05, +0.13] |
+| 20 | value | **+0.30 [+0.11, +0.49]** | +0.85 [−1.11, +2.37] | −1.91 [−5.77, +0.93] | **+0.30 [+0.13, +0.52]** | **+0.29 [+0.11, +0.53]** |
+| 20 | classifier | **+0.38 [+0.20, +0.56]** | +1.95 [−0.15, +3.77] | −1.00 [−4.99, +2.18] | **+0.39 [+0.18, +0.66]** | **+0.29 [+0.08, +0.56]** |
+| 20 | top-B | **+1.21 [+0.94, +1.51]** | **+3.33 [+0.91, +5.72]** | −0.19 [−4.23, +3.19] | **+0.56 [+0.21, +1.10]** | **+0.33 [+0.09, +0.62]** |
+
+- **RL beats the myopic value policy significantly on the held-out GLDv2 split at every budget**, so the gain comes from multi-step planning, not only from optimising AP. It also beats all baselines on RParis Medium at every budget (CIs exclude 0; e.g. 34 queries better vs 1 worse at B = 10 vs classifier).
+- **ROxford is inconclusive with 70 queries:** Medium point estimates +0.1 to +2.0 vs the learned baselines (CIs include 0), Hard −1.0 to −2.2 (CIs include 0). Against the standard top-B re-ranking at B = 20, ROxford Medium +3.33 is significant.
+- **Interpretation:** the RL verification policy is a genuine, statistically supported improvement on held-out GLDv2 queries and on RParis. The ROxford Hard drop matches the reward mismatch noted in V1 (the reward does not separate easy from hard positives).
+
 ### V1. First results (precompute job 4575648, 22 min; policies job 4575657, 8 min)
 Fixed descriptor: GLDv2 FastAP-bank seed 42 (`gcmp_fapb_lr3e-7_seed42`). Top-100 shortlist per query; the method verifies B items one at a time (seeing each outcome), then verified matches (≥ 35 inliers) move to the top by inliers; reward/metric = official AP of the final ranking. Policies are trained on GLDv2-clean val queries of 2/3 of the landmarks (2,041 queries), selected on the other 1/3 (959 queries, "gld_val"), and evaluated once on ROxford/RParis. RL = MLP policy over 10 per-candidate features, REINFORCE with leave-one-out baseline (16 rollouts per query); classifier = same MLP and features trained with BCE to predict a verified match, chosen greedily and adaptively. 3 policy-training seeds each (std ≤ 0.2 except ROxf Hard ≤ 0.7).
 
