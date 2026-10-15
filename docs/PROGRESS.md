@@ -23,7 +23,7 @@ All learned methods (classifier, myopic value, RL) use the same attention networ
 
 | B | method (lr chosen per method on gld_val) | gld_val | ROxf M | ROxf H | RPar M | RPar H |
 |---|---|---|---|---|---|---|
-| 0 | none | 63.09* | 54.35 | 30.35 | 75.37 | 56.36 |
+| 0 | none | 63.41 | 54.35 | 30.35 | 75.37 | 56.36 |
 | 10 | top-B | 64.22 | 55.76 | 33.07 | 75.47 | 56.46 |
 | 10 | classifier (1e-3) | 65.47 | 57.53 | 34.55 | 75.60 | 56.49 |
 | 10 | value (1e-3) | 65.57 | 58.02 | 34.25 | 75.67 | 56.49 |
@@ -32,9 +32,7 @@ All learned methods (classifier, myopic value, RL) use the same attention networ
 | 20 | classifier (1e-3) | 66.16 | 60.12 | 36.30 | 75.89 | 56.66 |
 | 20 | value (1e-3) | 66.13 | 59.85 | 34.66 | 75.87 | 56.63 |
 | 20 | **RL (3e-4)** | **66.25** | **61.33** | **37.28** | **75.90** | **56.67** |
-| 100 | verify all | – | 64.85 | 43.10 | 76.89 | 57.71 |
-
-*no-verification gld_val for the 3,280-query split.
+| 100 | verify all | 63.85 | 64.85 | 43.10 | 76.89 | 57.71 |
 
 Paired bootstrap at the same lr (3e-4), RL − baseline:
 - gld_val: vs value **+0.17 [+0.08, +0.27]** (B10), **+0.15 [+0.06, +0.24]** (B20); vs classifier **+0.37 / +0.13**.
