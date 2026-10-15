@@ -6,7 +6,10 @@ Methods at verification budget B (out of a top-K shortlist):
   top         verify the B most similar items (standard re-ranking heuristic)
   random      verify B random shortlist items
   classifier  MLP on the same features trained to predict "verified match" (BCE), chosen greedily and
-              adaptively (strongest non-RL baseline: myopic, same information)
+              adaptively
+  value       MLP on the same features regressing the one-step AP gain of verifying each item (exact
+              targets from the ground truth during training), chosen greedily: myopic but optimises the
+              same final-AP objective as RL, so RL - value isolates multi-step planning
   rl          same MLP architecture trained with REINFORCE + leave-one-out baseline on final AP
   all_K       verify the whole shortlist (upper bound for this re-ranking rule)
 Policies are trained on GLDv2-clean val queries of 2/3 of the landmarks, selected on the other 1/3,
@@ -43,10 +46,27 @@ def subset(d, idx):
     return {k: v[idx] for k, v in d.items()}
 
 
-def evaluate(env, scorer, mode='greedy', reps=1):
+PER_QUERY = {}
+
+
+def evaluate(env, scorer, mode='greedy', reps=1, key=None):
+    """Mean AP; per-query APs (averaged over reps) are stored in PER_QUERY[key] if key is given."""
     idx = torch.arange(env.Q, device=env.d['sim'].device)
     with torch.no_grad():
-        return float(np.mean([rollout(env, idx, scorer, mode)[0].mean().item() for _ in range(reps)]))
+        per = torch.stack([rollout(env, idx, scorer, mode)[0] for _ in range(reps)]).mean(0)
+    if key is not None:
+        PER_QUERY.setdefault(key, []).append(per.cpu().numpy())
+    return float(per.mean().item())
+
+
+def one_step_gains(env, idx, verified):
+    """Exact AP gain of additionally verifying each candidate: (N, K); already-verified items get 0."""
+    N, K = verified.shape
+    base = env.reward(idx, verified)
+    aug = verified[:, None, :].expand(N, K, K).clone()
+    aug[:, torch.arange(K), torch.arange(K)] = True
+    r = env.reward(idx.repeat_interleave(K), aug.reshape(N * K, K)).view(N, K)
+    return (r - base[:, None]).masked_fill(verified, 0.0)
 
 
 def main():
@@ -100,11 +120,11 @@ def main():
     for B in a.budgets:
         envs = {k: VerifyEnv(v, B, a.threshold) for k, v in pools.items()}
         res = {}
-        res['none'] = {k: evaluate(VerifyEnv(v, 0, a.threshold), sim_scorer) for k, v in pools.items()}
-        res['top'] = {k: evaluate(e, sim_scorer) for k, e in envs.items()}
+        res['none'] = {k: evaluate(VerifyEnv(v, 0, a.threshold), sim_scorer, key=(B, 'none', k)) for k, v in pools.items()}
+        res['top'] = {k: evaluate(e, sim_scorer, key=(B, 'top', k)) for k, e in envs.items()}
         res['random'] = {k: evaluate(e, lambda f: torch.zeros_like(f[..., 0]), 'sample', reps=5) for k, e in envs.items()}
         res['all_K'] = {k: evaluate(VerifyEnv(v, K, a.threshold), sim_scorer) for k, v in pools.items()}
-        for method in ('classifier', 'rl'):
+        for method in ('classifier', 'value', 'rl'):
             per_seed = []
             for seed in a.seeds:
                 torch.manual_seed(seed)
@@ -120,6 +140,14 @@ def main():
                         r = r.view(a.batch, a.samples)
                         adv = r - (r.sum(1, keepdim=True) - r) / (a.samples - 1)
                         loss = -(adv.detach().flatten() * logp).mean()
+                    elif method == 'value':
+                        with torch.no_grad():
+                            sc = (lambda f: torch.zeros_like(f[..., 0])) if it % 2 else sim_scorer
+                            sub = VerifyEnv(tr.d, int(torch.randint(0, B, (1,))), a.threshold)
+                            _, _, ver = rollout(sub, idx, sc, 'sample' if it % 2 else 'greedy')
+                            target = one_step_gains(tr, idx, ver) * 100
+                        pred = pol(tr.features(idx, ver, tr.match[idx]))
+                        loss = F.mse_loss(pred[~ver], target[~ver])
                     else:
                         # states from a mix of random and top-similarity rollouts; label = verified match
                         with torch.no_grad():
@@ -137,13 +165,14 @@ def main():
                         if v > best:
                             best, best_state = v, {k: x.clone() for k, x in pol.state_dict().items()}
                 pol.load_state_dict(best_state)
-                per_seed.append({k: evaluate(e, pol) for k, e in envs.items()})
+                per_seed.append({k: evaluate(e, pol, key=(B, method, k)) for k, e in envs.items()})
             res[method] = {k: float(np.mean([s[k] for s in per_seed])) for k in envs}
             res[method + '_seeds'] = per_seed
         results[f'B{B}'] = res
         print(f"B={B}: " + json.dumps({m: {k: round(100 * v, 2) for k, v in r.items()} for m, r in res.items()
                                        if not m.endswith('_seeds')}), flush=True)
         (out / 'results.json').write_text(json.dumps(results, indent=1))
+        np.savez(out / 'per_query.npz', **{f'B{b}|{m}|{p}': np.mean(v, 0) for (b, m, p), v in PER_QUERY.items()})
 
 
 if __name__ == '__main__':
