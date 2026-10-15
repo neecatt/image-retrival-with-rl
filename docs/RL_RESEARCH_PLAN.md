@@ -70,7 +70,7 @@ Lesson so far: when RL's reward is computable from per-pair labels that a differ
 
 **Principle (user, 2026-10-15): maximise every baseline honestly before adding RL.**
 - Stage 1 / descriptors are tuned to their best on held-out validation only; if an off-the-shelf model beats a fine-tuned one, it is the baseline. Selection now optionally averages several held-out val sets (`training.extra_val_sets`, e.g. GLDv2-clean val + SfM-120k val) so loss of generality is visible.
-- [ ] M1 DINOv2 Stage 1 tuning grid (jobs 4581055–59): lr 1e-5 / 3e-6 / 1e-6, layer decay 0.65 / 0.75, freezing 4 / 6 blocks, no projection (768-d CLS). Off-the-shelf on SfM val: job 4581054. The best on mean validation becomes the DINOv2 baseline.
+- [x] M1 DINOv2 Stage 1 tuning grid done (PROGRESS M1): selected lr 3e-6 / freeze 4 / decay 0.75 (mean val 82.08 vs 75.13 off the shelf); full 6-epoch run job 4582323. Forgetting test: RL not better than FastAP-bank. Track V on DINOv2 replicates the held-out RL advantage (small). Grid was (jobs 4581055–59): lr 1e-5 / 3e-6 / 1e-6, layer decay 0.65 / 0.75, freezing 4 / 6 blocks, no projection (768-d CLS). Off-the-shelf on SfM val: job 4581054. The best on mean validation becomes the DINOv2 baseline.
 - [ ] M2 ResNet50 GLDv2 Stage 1 with 20 epochs (val was still rising at 10), mean-val selection (job 4581061).
 - [ ] M3 Evaluation upgrades applied equally to all arms: multi-scale testing and learned whitening (fit on training data only).
 

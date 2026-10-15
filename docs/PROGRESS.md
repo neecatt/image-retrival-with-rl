@@ -2,6 +2,51 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### M1. DINOv2 Stage 1 tuned honestly; forgetting test; Track V on DINOv2 (2026-10-15)
+**Selection rule for all runs below:** mean of GLDv2-clean val and SfM-120k val leave-one-out mAP (both held out; no ROxford/RParis). Off-the-shelf DINOv2 CLS: GLDv2 val 63.33, SfM val 86.93 → mean **75.13**.
+
+*Stage 1 tuning grid* (jobs 4581055–59; FastAP, 768-d CLS output without projection, 448 px, 3 × 1,000 batches; best epoch by mean val):
+
+| lr / freeze / layer decay | GLDv2 val | SfM val | **mean (selection)** | ROxf M / H | RPar M / H |
+|---|---|---|---|---|---|
+| 1e-5 / 0 / 0.65 | 75.58 | 87.82 | 81.70 | 70.38 / 48.37 | 90.13 / 78.78 |
+| 1e-5 / 6 / 1.0 | 75.52 | 87.75 | 81.64 | 70.82 / 49.37 | 90.25 / 79.04 |
+| 3e-6 / 0 / 0.75 | 75.67 | 88.47 | 82.07 | 71.35 / 51.20 | 91.24 / 81.29 |
+| 1e-6 / 0 / 1.0 | 74.61 | 88.92 | 81.77 | 70.41 / 48.98 | 91.73 / 82.57 |
+| **3e-6 / 4 / 0.75** | 75.68 | 88.49 | **82.08** | **71.38 / 51.31** | 91.26 / 81.34 |
+| (off the shelf) | 63.33 | 86.93 | 75.13 | 64.51 / 41.81 | 88.29 / 75.24 |
+
+- **Gentle fine-tuning without a random projection beats off-the-shelf DINOv2 on validation and on both benchmarks** (selected config: ROxf +6.9 / +9.5, RPar +3.0 / +6.1). The failed run D2 used a randomly initialised 512-d projection, lr 1e-5 without layer decay, and GLDv2-only selection.
+- **Full run of the selected config submitted** (6 epochs, ~9 h, job 4582323). This becomes the DINOv2 baseline.
+
+*Forgetting test* (jobs 4581063–68; from off-the-shelf, all-vs-all batches + 4,096 bank, AMP, 2 × 1,432 batches of 128; best epoch by mean val):
+
+| arm | lr | mean val (selection) | ROxf M / H | RPar M / H |
+|---|---|---|---|---|
+| PL RL | 1e-6 | 78.50 | 72.15 / 49.49 | 89.32 / 79.78 |
+| PL RL | 3e-7 | 79.06 | 71.10 / 48.51 | 87.16 / 74.92 |
+| **FastAP-bank** | **3e-7** | **81.20** | **74.29 / 54.85** | 89.70 / 78.96 |
+| FastAP-bank | 1e-6 | 79.05 | 75.19 / 54.30 | 87.81 / 77.99 |
+| Smooth-AP | 3e-7 | 78.75 | 71.84 / 50.70 | 87.02 / 75.09 |
+| Smooth-AP | 1e-6 | 77.77 | 72.45 / 49.11 | 86.75 / 75.04 |
+
+- **RL does not preserve DINOv2's generality better than the surrogates;** FastAP-bank is best on validation (81.20 vs 79.06 for the best RL). The "gentler RL" hypothesis is not supported.
+- By validation, the Stage 1 grid winner (82.08) remains the best DINOv2 model.
+
+*Track V on the off-the-shelf DINOv2 descriptor* (precompute 4580901; attention policies 4580902–03; 10,000 GLDv2 queries; lr 3e-4):
+
+| B | method | gld_val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|---|
+| 0 | none | 61.08 | 64.50 | 41.79 | 88.29 | 75.24 |
+| 20 | top-B | 61.92 | 67.96 | 48.43 | 88.40 | 75.40 |
+| 20 | classifier | 63.24 | 71.36 | 49.69 | 88.42 | 75.42 |
+| 20 | value | 63.31 | 71.50 | **50.24** | 88.26 | 75.28 |
+| 20 | **RL** | **63.43** | **71.60** | 50.16 | 88.36 | 75.39 |
+| 100 | verify all | 60.86 | 72.56 | 50.74 | 88.82 | 75.90 |
+
+Bootstrap RL − baseline: gld_val vs value **+0.20** (B10) / **+0.13** (B20), vs classifier **+0.54 / +0.19** (all CIs > 0); ROxf at B20 vs classifier **M +0.24 [+0.11, +0.39], H +0.46 [+0.10, +0.98]**; at B10 ROxf below the classifier (n.s.). RParis ties.
+- **The RL verification-policy advantage on held-out queries replicates on a second descriptor,** but on the benchmarks DINOv2 leaves little room: RL at B = 20 is within 1 point of verifying the whole shortlist on ROxford Medium.
+
 ### D2. DINOv2 Stage 1 on GLDv2-clean forgets (job 4575802, 9 h 34 min)
 CLS token, FastAP, lr 1e-5, batch 128, 448 px, 6 epochs. GLDv2 val 63.33 (off-the-shelf) → 72.65, 72.84, 72.74, 74.08, 75.18, 76.32, **76.51**. Benchmarks of the final checkpoint (long side 1024): **ROxf M/H 53.53 / 26.91, RPar M/H 77.48 / 58.43**, against **64.51 / 41.81 and 88.29 / 75.24 off the shelf**.
 - In-domain validation rises by 13 points while ROxford/RParis drop by 11–17: fine-tuning on GLDv2 with FastAP destroys the general features of DINOv2 (forgetting). The selection metric (GLDv2 val) cannot see this.
