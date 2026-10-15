@@ -18,6 +18,34 @@ GLDv2-clean Stage 1 pilot (FastAP, batch 128, 448 px, 3 x 1,000 batches; GLDv2 v
 
 ## 2026-10-15: Track V, RL for budgeted geometric verification
 
+### V4. Attention policy over the whole shortlist (jobs 4576077–78, 2 h 11 min each)
+All learned methods (classifier, myopic value, RL) use the same attention network: per-candidate features → 2 self-attention layers over the 100 candidates, with attention logits biased by pairwise descriptor similarity (72k parameters). 10,000-query data (V3); lr 1e-3 or 3e-4 for every method; 3 seeds.
+
+| B | method (lr chosen per method on gld_val) | gld_val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|---|
+| 0 | none | 63.09* | 54.35 | 30.35 | 75.37 | 56.36 |
+| 10 | top-B | 64.22 | 55.76 | 33.07 | 75.47 | 56.46 |
+| 10 | classifier (1e-3) | 65.47 | 57.53 | 34.55 | 75.60 | 56.49 |
+| 10 | value (1e-3) | 65.57 | 58.02 | 34.25 | 75.67 | 56.49 |
+| 10 | **RL (3e-4)** | **65.77** | **58.85** | **35.91** | 75.61 | 56.42 |
+| 20 | top-B | 64.76 | 56.83 | 33.95 | 75.61 | 56.54 |
+| 20 | classifier (1e-3) | 66.16 | 60.12 | 36.30 | 75.89 | 56.66 |
+| 20 | value (1e-3) | 66.13 | 59.85 | 34.66 | 75.87 | 56.63 |
+| 20 | **RL (3e-4)** | **66.25** | **61.33** | **37.28** | **75.90** | **56.67** |
+| 100 | verify all | – | 64.85 | 43.10 | 76.89 | 57.71 |
+
+*no-verification gld_val for the 3,280-query split.
+
+Paired bootstrap at the same lr (3e-4), RL − baseline:
+- gld_val: vs value **+0.17 [+0.08, +0.27]** (B10), **+0.15 [+0.06, +0.24]** (B20); vs classifier **+0.37 / +0.13**.
+- ROxf M: vs classifier **+1.19 [+0.51, +1.88]** (B10), **+1.10 [+0.68, +1.57]** (B20); vs value +0.50 [−0.32, +1.47] (B10), **+0.72 [+0.22, +1.33]** (B20).
+- ROxf H: vs classifier +1.18 [−0.03, +2.37] (B10), **+0.99 [+0.30, +1.75]** (B20); vs value +1.72 [−0.06, +4.22] (B10), +0.49 [−0.52, +1.88] (B20).
+- RParis: ties (RPar M within ±0.05; RPar is near saturation, verify-all is only +1.0 above no verification).
+
+- **With a policy that sees the whole shortlist, RL leads every learned baseline on the held-out split and on ROxford, and the ROxford Hard deficit of V1–V3 disappears.** RL is significantly better than the classifier on ROxford Medium and Hard at B = 20 and than the myopic value policy on ROxford Medium at B = 20.
+- At B = 20, RL with attention reaches ROxf M/H **61.33 / 37.28**: +4.5 / +3.3 over standard top-20 re-ranking and +7.0 / +6.9 over no verification, with 20 verifications per query instead of 100.
+- The learned baselines gained the most from attention (classifier ROxf M at B20: 58.57 → 60.12). RL's margin over them is modest (+0.1 to +0.4 gld_val, +0.7 to +1.5 ROxford Medium), but it has the same sign in every setting.
+
 ### V3. 10,000 training queries and a hard-proxy reward (precompute 4575824, 51 min; policies 4575827–29, 18 min each)
 Same descriptor and protocol; 10,000 GLDv2-clean val queries → 6,720 policy-train / 3,280 policy-val (landmark split); 3,000 iterations; reward mixed with a hard-proxy AP (shortlist positives with ≥ 150 inliers ignored) at weight 0 / 0.25 / 0.5.
 
