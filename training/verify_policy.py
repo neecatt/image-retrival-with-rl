@@ -67,9 +67,12 @@ def final_order(match: torch.Tensor, inliers: torch.Tensor, verified: torch.Tens
 # Environment (batched over queries x trajectories)
 # ---------------------------------------------------------------------------------------------
 class VerifyEnv:
-    def __init__(self, data: Dict[str, torch.Tensor], budget: int, threshold: int = 35):
+    def __init__(self, data: Dict[str, torch.Tensor], budget: int, threshold: int = 35, hard_mix: float = 0.0):
         # data: sim (Q,K), cand_sim (Q,K,K), inliers (Q,K), rel (Q,K) int, npos (Q,), ap_tail (Q,)
         self.d, self.B, self.T = data, budget, threshold
+        # hard_mix > 0 (training only): reward = (1 - w) AP + w AP_hardproxy, where the hard proxy
+        # ignores "easy" positives (data['rel_hard'], 'npos_hard', 'ap_tail_hard'), like the Revisited Hard protocol
+        self.w = hard_mix if 'rel_hard' in data else 0.0
         self.Q, self.K = data['sim'].shape
         self.match = data['inliers'] >= threshold
 
@@ -95,8 +98,12 @@ class VerifyEnv:
     def reward(self, idx, verified):
         match, inl, rel = self.match[idx], self.d['inliers'][idx], self.d['rel'][idx]
         perm = final_order(match, inl, verified)
-        r = torch.gather(rel, -1, perm)
-        return ap_top(r, self.d['npos'][idx].float()) + self.d['ap_tail'][idx]
+        ap = ap_top(torch.gather(rel, -1, perm), self.d['npos'][idx].float()) + self.d['ap_tail'][idx]
+        if self.w > 0:
+            rh = torch.gather(self.d['rel_hard'][idx], -1, perm)
+            ap_h = ap_top(rh, self.d['npos_hard'][idx].float()) + self.d['ap_tail_hard'][idx]
+            ap = (1 - self.w) * ap + self.w * ap_h
+        return ap
 
 
 class Policy(nn.Module):
