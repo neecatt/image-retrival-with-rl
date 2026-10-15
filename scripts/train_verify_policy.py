@@ -23,7 +23,7 @@ import torch
 import torch.nn.functional as F
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from training.verify_policy import Policy, VerifyEnv, query_tables, rollout   # noqa: E402
+from training.verify_policy import AttnPolicy, Policy, VerifyEnv, query_tables, rollout   # noqa: E402
 
 
 def build(sim_full, top_idx, inliers, cand_sim, rel_full, K, dev):
@@ -81,6 +81,7 @@ def main():
     ap.add_argument('--batch', type=int, default=128)
     ap.add_argument('--lr', type=float, default=1e-3)
     ap.add_argument('--seeds', type=int, nargs='+', default=[0, 1, 2])
+    ap.add_argument('--arch', choices=['mlp', 'attn'], default='mlp', help='policy/value network (same for all learned methods)')
     ap.add_argument('--hard_mix', type=float, default=0.0, help='weight of the hard-proxy AP in the training reward')
     ap.add_argument('--easy_inliers', type=int, default=150, help='shortlist positives with >= this many inliers count as easy')
     a = ap.parse_args()
@@ -137,7 +138,7 @@ def main():
             per_seed = []
             for seed in a.seeds:
                 torch.manual_seed(seed)
-                pol = Policy().to(dev)
+                pol = (AttnPolicy() if a.arch == 'attn' else Policy()).to(dev)
                 opt = torch.optim.Adam(pol.parameters(), lr=a.lr)
                 tr = VerifyEnv(pools['gld_train'], B, a.threshold, hard_mix=a.hard_mix)
                 best, best_state = -1, None
@@ -155,7 +156,8 @@ def main():
                             sub = VerifyEnv(tr.d, int(torch.randint(0, B, (1,))), a.threshold)
                             _, _, ver = rollout(sub, idx, sc, 'sample' if it % 2 else 'greedy')
                             target = one_step_gains(tr, idx, ver) * 100
-                        pred = pol(tr.features(idx, ver, tr.match[idx]))
+                        fx = tr.features(idx, ver, tr.match[idx])
+                        pred = pol(fx, tr.d['cand_sim'][idx].float()) if a.arch == 'attn' else pol(fx)
                         loss = F.mse_loss(pred[~ver], target[~ver])
                     else:
                         # states from a mix of random and top-similarity rollouts; label = verified match
@@ -165,7 +167,7 @@ def main():
                             sub = VerifyEnv(tr.d, k_steps, a.threshold)
                             _, _, ver = rollout(sub, idx, sc, 'sample' if it % 2 else 'greedy')
                         f = tr.features(idx, ver, tr.match[idx])
-                        logit = pol(f)
+                        logit = pol(f, tr.d['cand_sim'][idx].float()) if a.arch == 'attn' else pol(f)
                         m = ~ver
                         loss = F.binary_cross_entropy_with_logits(logit[m], tr.match[idx][m].float())
                     opt.zero_grad(); loss.backward(); opt.step()

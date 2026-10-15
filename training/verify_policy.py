@@ -116,6 +116,37 @@ class Policy(nn.Module):
         return self.net(f).squeeze(-1)
 
 
+class AttnPolicy(nn.Module):
+    """Candidates attend to each other (attention logits biased by their pairwise descriptor
+    similarity), so a candidate's score can depend on the whole shortlist and on verified outcomes."""
+    uses_sim = True
+
+    def __init__(self, n_feat: int = 10, d: int = 64, layers: int = 2, heads: int = 4):
+        super().__init__()
+        self.inp = nn.Sequential(nn.Linear(n_feat, d), nn.ReLU(), nn.Linear(d, d))
+        self.h = heads
+        self.qkv = nn.ModuleList([nn.Linear(d, 3 * d) for _ in range(layers)])
+        self.proj = nn.ModuleList([nn.Linear(d, d) for _ in range(layers)])
+        self.ff = nn.ModuleList([nn.Sequential(nn.LayerNorm(d), nn.Linear(d, 2 * d), nn.ReLU(), nn.Linear(2 * d, d))
+                                 for _ in range(layers)])
+        self.norm = nn.ModuleList([nn.LayerNorm(d) for _ in range(layers)])
+        self.sim_scale = nn.Parameter(torch.full((layers, heads), 5.0))
+        self.out = nn.Linear(d, 1)
+
+    def forward(self, f, C=None):
+        N, K, _ = f.shape
+        x = self.inp(f)
+        for l in range(len(self.qkv)):
+            q, k, v = self.qkv[l](self.norm[l](x)).chunk(3, -1)
+            q, k, v = (t.view(N, K, self.h, -1).transpose(1, 2) for t in (q, k, v))
+            att = q @ k.transpose(-1, -2) / q.size(-1) ** 0.5
+            if C is not None:
+                att = att + self.sim_scale[l].view(1, -1, 1, 1) * C[:, None]
+            x = x + self.proj[l]((att.softmax(-1) @ v).transpose(1, 2).reshape(N, K, -1))
+            x = x + self.ff[l](x)
+        return self.out(x).squeeze(-1)
+
+
 def rollout(env: VerifyEnv, idx: torch.Tensor, scorer, mode: str = 'sample', temperature: float = 1.0):
     """Run B verification steps for queries idx. scorer(features) -> (N,K) logits.
     mode: 'sample' (policy), 'greedy' (argmax). Returns final AP (N,), sum of log-probs (N,)."""
@@ -126,7 +157,10 @@ def rollout(env: VerifyEnv, idx: torch.Tensor, scorer, mode: str = 'sample', tem
     logp = torch.zeros(N, device=dev)
     for _ in range(env.B):
         f = env.features(idx, verified, match)
-        logits = scorer(f) / temperature
+        if getattr(scorer, 'uses_sim', False):
+            logits = scorer(f, env.d['cand_sim'][idx].float()) / temperature
+        else:
+            logits = scorer(f) / temperature
         logits = logits.masked_fill(verified, float('-inf'))
         if mode == 'sample':
             dist = torch.distributions.Categorical(logits=logits)
