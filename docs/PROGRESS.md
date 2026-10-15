@@ -2,6 +2,12 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### D2. DINOv2 Stage 1 on GLDv2-clean forgets (job 4575802, 9 h 34 min)
+CLS token, FastAP, lr 1e-5, batch 128, 448 px, 6 epochs. GLDv2 val 63.33 (off-the-shelf) → 72.65, 72.84, 72.74, 74.08, 75.18, 76.32, **76.51**. Benchmarks of the final checkpoint (long side 1024): **ROxf M/H 53.53 / 26.91, RPar M/H 77.48 / 58.43**, against **64.51 / 41.81 and 88.29 / 75.24 off the shelf**.
+- In-domain validation rises by 13 points while ROxford/RParis drop by 11–17: fine-tuning on GLDv2 with FastAP destroys the general features of DINOv2 (forgetting). The selection metric (GLDv2 val) cannot see this.
+- **New RL test (submitted):** starting from the off-the-shelf model (`$HPCVAULT/runs/stage0/dinov2_vitb14_cls.pth`, `scripts/make_stage0_checkpoint.py`), fine-tune with PL RL vs FastAP-bank vs Smooth-AP (same batches, bank, AMP, 2 × 1,432 batches, lr 1e-6 / 3e-7), with final benchmark evaluation (jobs 4580904–09). Earlier runs showed RL changing the model more gently (C4), so RL may keep the pretrained generality better.
+- **Track V on the off-the-shelf DINOv2 descriptor** submitted: precompute 4580901 (10,000 GLDv2 queries + benchmarks), attention policies 4580902–03.
+
 ### D1. DINOv2 ViT-B/14 as second backbone (jobs 4575620–4575624)
 Off-the-shelf (no training, no projection, long side 1024):
 
