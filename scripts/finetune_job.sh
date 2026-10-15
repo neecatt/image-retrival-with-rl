@@ -33,7 +33,7 @@ git diff > "$OUT/git_diff_${SLURM_JOB_ID}.patch"
 sha256sum "$INIT" > "$OUT/init_sha256.txt"
 
 TRAIN_SET="${TRAIN_SET:-sfm120k}"
-DATASETS=("$TRAIN_SET"); [ "$FINAL" = 1 ] && DATASETS+=(roxford5k rparis6k)
+DATASETS=("$TRAIN_SET" ${EXTRA_STAGE:-}); [ "$FINAL" = 1 ] && DATASETS+=(roxford5k rparis6k)
 python scripts/stage_datasets.py "${DATASETS[@]}"
 python scripts/make_run_config.py config/config.yaml "$OUT/run_config.yaml" \
     dataset.root_dir="$TMPDIR/data/raw" \

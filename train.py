@@ -34,6 +34,8 @@ import torch.nn as nn
 import torch.optim as optim
 from omegaconf import OmegaConf
 from pathlib import Path
+
+import numpy as np
 from datetime import datetime
 import random
 
@@ -55,6 +57,35 @@ from evaluation.sfm_val import evaluate_sfm_val
 from data.dataset_sfm120k import SfM120kDataset
 
 
+def param_groups(model, lr, config):
+    """Optimizer parameter groups. For DINOv2 backbones, model.freeze_blocks = n freezes the patch
+    embedding and the first n transformer blocks, and model.layer_decay = d < 1 scales the learning
+    rate of layer i by d ** (L + 1 - i) (layer-wise decay, standard for ViT fine-tuning); the final
+    norm, pooling and projection get the full lr. Other backbones: one group."""
+    mcfg = config['model']
+    vit = getattr(getattr(model, 'backbone', None), 'vit', None)
+    n_freeze, decay = int(mcfg.get('freeze_blocks', 0) or 0), float(mcfg.get('layer_decay', 1.0) or 1.0)
+    if vit is None or (n_freeze == 0 and decay == 1.0):
+        return [{'params': [p for p in model.parameters() if p.requires_grad], 'lr': lr}]
+    L = len(vit.blocks)
+
+    def layer_of(name):
+        if name.startswith('backbone.vit.blocks.'):
+            return int(name.split('.')[3]) + 1
+        if name.startswith('backbone.vit.') and not name.startswith('backbone.vit.norm'):
+            return 0                                    # patch embedding, cls/register tokens, pos embed
+        return L + 1                                    # final norm, pooling, projection
+    groups = {}
+    for name, p in model.named_parameters():
+        layer = layer_of(name)
+        if layer <= n_freeze and layer <= L:
+            p.requires_grad = False
+            continue
+        groups.setdefault(layer, []).append(p)
+    print(f"  param groups: {len(groups)} (frozen layers 0..{n_freeze}, layer decay {decay})")
+    return [{'params': ps, 'lr': lr * decay ** (L + 1 - layer)} for layer, ps in sorted(groups.items())]
+
+
 def selection_score(model, dataloaders, config, device, fallback: float, logger, tag: str, epoch: int):
     """Checkpoint-selection score (higher is better).
 
@@ -69,8 +100,35 @@ def selection_score(model, dataloaders, config, device, fallback: float, logger,
                              num_workers=config['system']['num_workers'])
         logger.log_scalar(f'{tag}/sfm_val_mAP', m['sfm_val_mAP'], epoch)
         logger.log_scalar(f'{tag}/sfm_val_success@1', m['sfm_val_success@1'], epoch)
+        # Optional extra held-out validation sets (e.g. SfM-120k val when training on GLDv2), so that
+        # selection also sees loss of generality ("forgetting"); the score is the mean of all val mAPs.
+        extra = config['training'].get('extra_val_sets') or []
+        scores = [m['sfm_val_mAP']]
+        for name in extra:
+            ds = _extra_val_dataset(name, config)
+            em = evaluate_sfm_val(model, ds, device, num_workers=config['system']['num_workers'])
+            m[f'{name}_val_mAP'] = em['sfm_val_mAP']
+            logger.log_scalar(f'{tag}/{name}_val_mAP', em['sfm_val_mAP'], epoch)
+            scores.append(em['sfm_val_mAP'])
+        if extra:
+            m['selection_mean_val_mAP'] = float(np.mean(scores))
+            print(f"  selection score (mean of {1 + len(extra)} val sets): {100 * m['selection_mean_val_mAP']:.2f}")
+            return m['selection_mean_val_mAP'], m
         return m['sfm_val_mAP'], m
     return fallback, {}
+
+
+_EXTRA_VAL = {}
+
+
+def _extra_val_dataset(name, config):
+    """Validation split of another training set (staged under dataset.root_dir), cached."""
+    if name not in _EXTRA_VAL:
+        size = int(config['dataset'].get('val_image_size', config['dataset']['image_size']))
+        tf = get_transforms(image_size=size, mode='eval', augmentation_config=config['augmentation']['val'])
+        fn = {'gldv2c': load_gldv2c, 'gldv2n': load_gldv2n}.get(name, load_sfm120k)
+        _, _EXTRA_VAL[name] = fn(str(Path(config['dataset']['root_dir']) / name), val_transform=tf)
+    return _EXTRA_VAL[name]
 
 
 def parse_args():
@@ -453,7 +511,7 @@ def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 
     # Create optimizer
     if stage1_config['optimizer'] == 'adam':
         optimizer = optim.Adam(
-            model.parameters(),
+            param_groups(model, stage1_config['learning_rate'], config),
             lr=stage1_config['learning_rate'],
             weight_decay=stage1_config['weight_decay']
         )
@@ -621,7 +679,7 @@ def train_stage2(model, dataloaders, config, device, logger):
     # Create optimizer
     if stage2_config['optimizer'] == 'adam':
         optimizer = optim.Adam(
-            model.parameters(),
+            param_groups(model, stage2_config['learning_rate'], config),
             lr=stage2_config['learning_rate'],
             weight_decay=stage2_config['weight_decay']
         )
