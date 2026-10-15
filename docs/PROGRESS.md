@@ -2,6 +2,20 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### D1. DINOv2 ViT-B/14 as second backbone (jobs 4575620–4575624)
+Off-the-shelf (no training, no projection, long side 1024):
+
+| Model | GLDv2 val | ROxf M / H | RPar M / H |
+|---|---|---|---|
+| ImageNet ResNet50-GeM | 29.39 | 24.14 / 5.66 | 44.76 / 21.16 |
+| DINOv2 ViT-B/14, GeM over patch tokens | 44.18 | 32.90 / 9.06 | 69.14 / 48.42 |
+| **DINOv2 ViT-B/14, CLS token** | 63.33 | **64.51 / 41.81** | **88.29 / 75.24** |
+| (GLDv2-trained ResNet50 Stage 1, 5 seeds) | 63.01 | 47.93 / 24.88 | 74.22 / 54.73 |
+
+GLDv2-clean Stage 1 pilot (FastAP, batch 128, 448 px, 3 x 1,000 batches; GLDv2 val after epoch 3): GeM lr 1e-5 73.67, GeM lr 3e-6 73.19, **CLS lr 1e-5 73.92**, CLS lr 3e-6 73.47. ~7.3 min per 1,000 batches, 54–55 GB GPU memory.
+- Untrained DINOv2 with the CLS token already beats our trained ResNet50 on both benchmarks. GeM over ViT patch tokens is poor (ViT tokens are signed and GeM clamps them).
+- **Full Stage 1 submitted:** CLS, lr 1e-5, 6 epochs (~9 h), job 4575802. Then the matched G10-style comparison (PL RL vs FastAP-bank / Smooth-AP) and Track V on the DINOv2 descriptor.
+
 ## 2026-10-15: Track V, RL for budgeted geometric verification
 
 ### V1. First results (precompute job 4575648, 22 min; policies job 4575657, 8 min)
