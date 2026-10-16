@@ -2,6 +2,11 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### M6. Search rung 2 and full-length winner runs (2026-10-17)
+Rung 2 (4 x 3,000 steps, about one GLDv2 pass; mean GLDv2+SfM val, per epoch, best last): DINOv2 **c04 83.16** (81.82 82.49 82.95 83.16), c00 83.12, c10 (lr 4e-6) 82.92; ResNet50 **c02 65.86** (59.00 62.78 65.20 65.86), c11 65.86, c09 (lr 3.8e-5) 65.33. Winners tie again within noise, so the choice is by the pre-set rule (top score, ties by lower lr).
+- **Final recipes:** DINOv2 CLS (768-d, no projection), AdamW lr 1.1e-5, weight decay 0.018, layer decay 0.83, 4 frozen blocks, FastAP, default crop, 448 px; ResNet50 + GeM + 512-d projection, AdamW lr 7.5e-5, weight decay 0.009, FastAP, RandomResizedCrop(0.3), 512 px; both batch 128, 2,000 warmup steps then cosine to zero per step, mean-val selection.
+- **Full-length runs submitted:** DINOv2 6 epochs x ~12,100 steps (job 4596033, seed 42); ResNet 10 epochs, seeds 42, 1, 2, 3, 4 (jobs 4596034-38). WiSE-FT is applied to the DINOv2 result afterwards. The ResNet seeds are the new Stage 1 baseline for the RL comparisons (replacing the Adam/no-warmup ResNet models), if they beat the old ones on validation.
+
 ### M5. Search rung 1 (2026-10-16; 3 x 1,500 steps, mean GLDv2+SfM val, best epoch; jobs 4594530-43)
 | DINOv2 config | lr / wd / layer decay / freeze / crop | epochs 1-2-3 | best |
 |---|---|---|---|
