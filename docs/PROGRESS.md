@@ -2,6 +2,31 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### M5. Search rung 1 (2026-10-16; 3 x 1,500 steps, mean GLDv2+SfM val, best epoch; jobs 4594530-43)
+| DINOv2 config | lr / wd / layer decay / freeze / crop | epochs 1-2-3 | best |
+|---|---|---|---|
+| c00 | 1.8e-5 / 0.073 / 0.71 / 2 / default | 81.54 82.45 **82.71** | 82.71 |
+| c04 | 1.1e-5 / 0.018 / 0.83 / 4 / default | 81.61 82.46 82.69 | 82.69 |
+| c03 | 8e-6 / 0.0015 / 0.97 / 6 / RRC | 81.37 82.17 82.54 | 82.54 |
+| c07 | 2.6e-5 / 0.005 / 0.64 / 4 / RRC | 81.48 82.24 82.53 | 82.53 |
+| c10 | 4e-6 / 0.076 / 0.79 / 2 / default | 81.74 82.32 82.39 | 82.39 |
+| c13 | 3e-6 / 0.004 / 0.96 / 2 / RRC | 81.57 82.17 82.29 | 82.29 |
+| c02 (ArcFace) | 3e-6 / 0.013 / 0.55 / 0 | 76.09 76.59 76.75 | 76.75 |
+
+| ResNet50 config | lr / wd / crop | epochs 1-2-3 | best |
+|---|---|---|---|
+| c11 | 1.0e-4 / 1.1e-3 / RRC | 56.57 60.87 **62.38** | 62.38 |
+| c02 | 7.5e-5 / 9.0e-3 / RRC | 57.54 61.20 62.20 | 62.20 |
+| c12 | 1.5e-4 / 0.036 / RRC | 54.78 60.13 62.08 | 62.08 |
+| c09 | 3.8e-5 / 2.3e-4 / default | 59.16 60.99 61.88 | 61.88 |
+| c05 | 5.1e-5 / 3.2e-4 / RRC | 58.04 60.81 61.78 | 61.78 |
+| c14 | 2.5e-5 / 5.2e-3 / default | 58.43 60.39 60.99 | 60.99 |
+| c01 (ArcFace) | 2.2e-5 / 7e-4 / RRC | 33.92 38.36 39.67 | 39.67 |
+
+- **The top FastAP configurations are indistinguishable** (DINOv2 82.3-82.7, ResNet 61.8-62.4, spreads below what one seed can resolve); weight decay, layer decay, freezing depth and crop style show no clear effect in this range. The best epoch is always the last: with warmup + cosine decay to zero inside each rung, the forgetting peak seen in the old runs (best at epoch 2 of 6) does not appear. Longer budgets keep helping (DINOv2 rung 0 -> 1: +0.7).
+- **ArcFace improves with budget (DINOv2 75.5 -> 76.8, ResNet 28 -> 39.7) but stays far below FastAP**, so the rung-0 bias does not explain the gap at these budgets; it is dropped.
+- **Rung 2** (4 x 3,000 steps = about one GLDv2 pass): DINOv2 c00, c04 and the low-lr hedge c10; ResNet c11, c02 and the low-lr hedge c09 (short runs favour high learning rates, a known bias of successive halving). Jobs below; then a full-length run of each winner, WiSE-FT on the result, and 5 seeds for ResNet.
+
 ### M4. Search rung 0 and WiSE-FT results (2026-10-16)
 **WiSE-FT** (jobs 4593966–67; α chosen on mean GLDv2+SfM val; α = 0 is the off-the-shelf model, 1 the fine-tuned one; DINOv2 CLS, M2 checkpoints which were trained without working freeze/decay):
 
