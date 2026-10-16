@@ -2,6 +2,24 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### M4. Search rung 0 and WiSE-FT results (2026-10-16)
+**WiSE-FT** (jobs 4593966–67; α chosen on mean GLDv2+SfM val; α = 0 is the off-the-shelf model, 1 the fine-tuned one; DINOv2 CLS, M2 checkpoints which were trained without working freeze/decay):
+
+| α | 0 | 0.2 | 0.4 | 0.5 | 0.6 | 0.7 | 0.8 | 0.9 | 1.0 |
+|---|---|---|---|---|---|---|---|---|---|
+| epoch-2 ckpt, mean val | 75.16 | 78.96 | 81.73 | 82.61 | 83.16 | **83.41** | 83.36 | 83.06 | 82.54 |
+| epoch-6 ckpt, mean val | 75.16 | 78.85 | 81.69 | 82.64 | 83.24 | **83.47** | 83.32 | 82.74 | 81.60 |
+
+- Interpolating weights beats both end points on validation (+0.9 over the best fine-tuned checkpoint, +8.3 over the off-the-shelf model), and removes the epoch dependence: the over-trained epoch-6 model becomes the best after interpolation. At α = 0.7: GLDv2 val 78.05, SfM val 88.90.
+- Benchmarks of the selected interpolations (not used for selection): epoch-2 α 0.7: ROxf M/H 72.14 / 51.38, RPar M/H 91.85 / 82.94; epoch-6 α 0.7: 68.59 / 45.26, 91.46 / 81.83. For reference: off the shelf 64.51 / 41.81, 88.29 / 75.24; fine-tuned epoch 2 67.20 / 45.65, 90.38 / 79.50.
+- So the forgetting is largely a drift in weight space that interpolation undoes; the fine-tuned weights hold useful task knowledge but have moved too far from the pretrained solution.
+
+**Rung 0 of the search** (2 × 750 steps; mean val, best epoch; all 32 runs finished in ~2 h):
+- *DINOv2:* FastAP configurations 81.7–82.0 (c00 82.02, c04 81.99, c07 81.92, c03 81.87, c10 81.71, c13 81.70), very flat across lr 3e-6–2.6e-5, weight decay 0.0015–0.076, freeze 2–6, layer decay 0.64–0.97; too-small lr (1e-6, 2e-6) 80.5. **Every sub-center ArcFace configuration was worse (best 75.5, down to 15) and most were below the untrained model (75.16).**
+- *ResNet50:* FastAP 55.3–58.7 (c11 58.69, c02 58.54, c12 58.49, c09 58.43, c05 58.10, c14 57.63), lr 2.5e-5–1.5e-4 flat; ArcFace 2.7–27.9.
+- **Caveat on ArcFace:** the class-centre matrix (79,813 × 3 vectors) starts random and needs many passes; 1,500 steps see each class about once. Successive halving at short rungs is therefore biased against it, so the best ArcFace configuration of each backbone is promoted as a check.
+- **Rung 1** (3 × 1,500 steps): the six best FastAP configurations plus the best ArcFace configuration per backbone, jobs 4594530–43.
+
 ### M3. Why DINOv2 forgets and peaks at epoch 2: two training bugs/defects found (2026-10-16)
 **Diagnosis from the checkpoints** (relative change ‖θ − θ₀‖/‖θ₀‖ and weight-norm ratio vs the off-the-shelf model, per group of blocks):
 
