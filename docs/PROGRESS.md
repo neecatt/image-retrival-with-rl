@@ -2,6 +2,11 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### M2. Full-length Stage 1 runs with mean-val selection (jobs 4582323, 4581061; finished 2026-10-16)
+- **DINOv2 CLS, lr 3e-6, 4 frozen blocks, layer decay 0.75, 6 epochs** (12 h 57 min): mean val per epoch 82.36, **82.54**, 81.89, 81.65, 81.55, 81.60 (GLDv2 val keeps rising to 77.5 while SfM val falls from 88.0 to 85.7: forgetting again, now visible to selection). Selected epoch 2: GLDv2 val 77.44 / SfM val 87.63 (at 448 px). Benchmarks: **ROxf M/H 67.20 / 45.65, RPar M/H 90.38 / 79.50**. The short pilot (mean val 82.08) had 71.38 / 51.31 and 91.26 / 81.34: by the selection rule the full run is the DINOv2 baseline, although it is lower on both benchmarks. Validation differences of ~0.5 do not track 70-query benchmark differences reliably.
+- **ResNet50 GLDv2, 20 epochs** (19 h 28 min): mean val rises every epoch to 69.78 (epoch 20). Benchmarks: ROxf M/H 47.72 / 26.16, RPar M/H 74.12 / 53.04, vs 49.93 / 27.15 and 72.27 / 53.79 after 10 epochs (seed 42). No clear gain from doubling the schedule.
+- Checked: `stage1_best.pth` of the DINOv2 run holds epoch 2 (selection score 0.8254). The GLDv2 val reported by the final evaluation (77.54) is computed at 512 px, while training validation uses 448 px; this applies to every run.
+
 ### M1. DINOv2 Stage 1 tuned honestly; forgetting test; Track V on DINOv2 (2026-10-15)
 **Selection rule for all runs below:** mean of GLDv2-clean val and SfM-120k val leave-one-out mAP (both held out; no ROxford/RParis). Off-the-shelf DINOv2 CLS: GLDv2 val 63.33, SfM val 86.93 → mean **75.13**.
 
