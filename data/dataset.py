@@ -404,10 +404,15 @@ def get_transforms(
     
     if mode == 'train':
         # Training augmentations
-        transform_list = [
-            transforms.Resize(int(image_size * 1.1)),  # Slightly larger
-            transforms.RandomCrop(image_size),
-        ]
+        if augmentation_config.get('rrc_scale_min'):
+            # RandomResizedCrop: random area/aspect crops resized to image_size
+            transform_list = [transforms.RandomResizedCrop(
+                image_size, scale=(float(augmentation_config['rrc_scale_min']), 1.0))]
+        else:
+            transform_list = [
+                transforms.Resize(int(image_size * 1.1)),  # Slightly larger
+                transforms.RandomCrop(image_size),
+            ]
         
         # Optional augmentations
         if augmentation_config.get('random_flip', True):
