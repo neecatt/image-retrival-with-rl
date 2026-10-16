@@ -88,7 +88,8 @@ class StandardTrainer:
         self,
         train_loader,
         epoch: int,
-        log_interval: int = 10
+        log_interval: int = 10,
+        step_scheduler=None
     ) -> Dict[str, float]:
         """
         Train for one epoch.
@@ -114,6 +115,8 @@ class StandardTrainer:
             
             # Forward pass
             loss = self.train_step(images, labels)
+            if step_scheduler is not None:      # per-step schedules (warmup + cosine)
+                step_scheduler.step()
             
             # Update meter
             loss_meter.update(loss.item(), images.size(0))
@@ -159,8 +162,8 @@ class StandardTrainer:
                 # Forward pass
                 embeddings = self.model(images)
                 
-                # Compute loss
-                loss = self.loss_fn(embeddings, labels)
+            # Loss in fp32 (classification heads such as ArcFace are unsafe in fp16)
+            loss = self.loss_fn(embeddings.float(), labels)
             
             # Backward pass with scaler
             self.scaler.scale(loss).backward()
@@ -169,7 +172,7 @@ class StandardTrainer:
             if self.gradient_clip > 0:
                 self.scaler.unscale_(self.optimizer)
                 torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
+                    [p for g in self.optimizer.param_groups for p in g['params']],
                     self.gradient_clip
                 )
             

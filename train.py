@@ -26,6 +26,7 @@ python train.py --config config/config.yaml --stage2_only --resume checkpoints/s
 """
 
 import argparse
+import json
 import copy
 import os
 import yaml
@@ -57,7 +58,10 @@ from evaluation.sfm_val import evaluate_sfm_val
 from data.dataset_sfm120k import SfM120kDataset
 
 
-def param_groups(model, lr, config):
+_NO_DECAY_KEYS = ('pos_embed', 'cls_token', 'reg_token', 'mask_token', '.ls1.', '.ls2.', 'gamma', 'norm')
+
+
+def param_groups(model, lr, config, weight_decay=None):
     """Optimizer parameter groups. For DINOv2 backbones, model.freeze_blocks = n freezes the patch
     embedding and the first n transformer blocks, and model.layer_decay = d < 1 scales the learning
     rate of layer i by d ** (L + 1 - i) (layer-wise decay, standard for ViT fine-tuning); the final
@@ -65,8 +69,20 @@ def param_groups(model, lr, config):
     mcfg = config['model']
     vit = getattr(getattr(model, 'backbone', None), 'vit', None)
     n_freeze, decay = int(mcfg.get('freeze_blocks', 0) or 0), float(mcfg.get('layer_decay', 1.0) or 1.0)
+
+    def split_wd(params_named, lr_g):
+        """weight_decay given (AdamW): no decay on biases, norms, LayerScale, tokens and pos embed."""
+        if weight_decay is None:
+            return [{'params': [p for _, p in params_named], 'lr': lr_g}]
+        dec = [p for n, p in params_named if p.ndim >= 2 and not any(k in n for k in _NO_DECAY_KEYS)]
+        nod = [p for n, p in params_named if not (p.ndim >= 2 and not any(k in n for k in _NO_DECAY_KEYS))]
+        return [g for g in ({'params': dec, 'lr': lr_g, 'weight_decay': weight_decay},
+                            {'params': nod, 'lr': lr_g, 'weight_decay': 0.0}) if g['params']]
+
+    # torch.compile wraps the model: parameter names carry an '_orig_mod.' prefix
+    named = [(n.replace('_orig_mod.', ''), p) for n, p in model.named_parameters() if p.requires_grad]
     if vit is None or (n_freeze == 0 and decay == 1.0):
-        return [{'params': [p for p in model.parameters() if p.requires_grad], 'lr': lr}]
+        return split_wd(named, lr)
     L = len(vit.blocks)
 
     def layer_of(name):
@@ -75,15 +91,22 @@ def param_groups(model, lr, config):
         if name.startswith('backbone.vit.') and not name.startswith('backbone.vit.norm'):
             return 0                                    # patch embedding, cls/register tokens, pos embed
         return L + 1                                    # final norm, pooling, projection
-    groups = {}
-    for name, p in model.named_parameters():
+    groups, n_frozen = {}, 0
+    for name, p in named:
         layer = layer_of(name)
         if layer <= n_freeze and layer <= L:
             p.requires_grad = False
+            n_frozen += p.numel()
             continue
-        groups.setdefault(layer, []).append(p)
-    print(f"  param groups: {len(groups)} (frozen layers 0..{n_freeze}, layer decay {decay})")
-    return [{'params': ps, 'lr': lr * decay ** (L + 1 - layer)} for layer, ps in sorted(groups.items())]
+        groups.setdefault(layer, []).append((name, p))
+    if n_freeze > 0 and n_frozen == 0 or decay != 1.0 and len(groups) < 2:
+        raise RuntimeError("freeze_blocks / layer_decay requested but no parameter matched; check names")
+    print(f"  param groups: {len(groups)} layers (frozen layers 0..{n_freeze}: {n_frozen:,} params, "
+          f"layer decay {decay})")
+    out = []
+    for layer, ps in sorted(groups.items()):
+        out += split_wd(ps, lr * decay ** (L + 1 - layer))
+    return out
 
 
 def selection_score(model, dataloaders, config, device, fallback: float, logger, tag: str, epoch: int):
@@ -502,18 +525,40 @@ def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 
     print(f"Stage 1 will run epochs {start_epoch}..{total_epochs} (total configured: {total_epochs})")
     
     # Create loss function
-    loss_fn = get_metric_loss(
-        loss_name=stage1_config['loss'],
-        margin=stage1_config.get('triplet_margin', 0.2),
-        num_bins=stage1_config.get('fastap_num_bins', 10)
-    )
-    
+    is_cls_loss = stage1_config['loss'] == 'subcenter_arcface'
+    if is_cls_loss:
+        # Sub-center ArcFace (Deng et al. 2020): classification over training landmarks with an
+        # angular margin; the class-centre matrix is trained with its own learning rate.
+        from pytorch_metric_learning import losses as pml_losses
+        n_cls = len(dataloaders['train'].dataset.label_to_indices)
+        emb_dim = getattr(model, 'output_dim', None) or model._orig_mod.output_dim
+        loss_fn = pml_losses.SubCenterArcFaceLoss(
+            num_classes=n_cls, embedding_size=emb_dim, margin=float(stage1_config.get('arcface_margin', 28.6)),
+            scale=float(stage1_config.get('arcface_scale', 64)), sub_centers=int(stage1_config.get('arcface_subcenters', 3))
+        ).to(device)
+        print(f"  SubCenterArcFace: {n_cls} classes x {stage1_config.get('arcface_subcenters', 3)} sub-centres, dim {emb_dim}")
+    else:
+        loss_fn = get_metric_loss(
+            loss_name=stage1_config['loss'],
+            margin=stage1_config.get('triplet_margin', 0.2),
+            num_bins=stage1_config.get('fastap_num_bins', 10)
+        )
+    head_groups = ([{'params': list(loss_fn.parameters()), 'lr': float(stage1_config.get('head_lr', 1e-3)),
+                     'weight_decay': 0.0}] if is_cls_loss else [])
+
     # Create optimizer
     if stage1_config['optimizer'] == 'adam':
         optimizer = optim.Adam(
-            param_groups(model, stage1_config['learning_rate'], config),
+            param_groups(model, stage1_config['learning_rate'], config) + head_groups,
             lr=stage1_config['learning_rate'],
             weight_decay=stage1_config['weight_decay']
+        )
+    elif stage1_config['optimizer'] == 'adamw':
+        # decoupled weight decay; none on biases, norms, LayerScale, tokens, position embedding
+        optimizer = optim.AdamW(
+            param_groups(model, stage1_config['learning_rate'], config,
+                         weight_decay=stage1_config['weight_decay']) + head_groups,
+            lr=stage1_config['learning_rate']
         )
     elif stage1_config['optimizer'] == 'sgd':
         optimizer = optim.SGD(
@@ -539,6 +584,16 @@ def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 
         )
     else:
         scheduler = None
+    # Per-step linear warmup + cosine decay to 0 over the whole run (stepped every batch)
+    step_scheduler = None
+    if stage1_config['scheduler'] == 'cosine_warmup':
+        import math
+        total_steps = total_epochs * len(dataloaders['train'])
+        warm = int(stage1_config.get('warmup_steps', 0))
+        step_scheduler = optim.lr_scheduler.LambdaLR(
+            optimizer, lambda t: (t + 1) / max(warm, 1) if t < warm
+            else 0.5 * (1 + math.cos(math.pi * (t - warm) / max(total_steps - warm, 1))))
+        print(f"  cosine_warmup: {warm} warmup steps, {total_steps} total steps")
 
     # Resuming a Stage 1 run: restore optimizer state, fast-forward the
     # epoch-level scheduler and keep the best validation score so far
@@ -548,6 +603,11 @@ def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 
         if scheduler is not None:
             for _ in range(start_epoch - 1):
                 scheduler.step()
+        if step_scheduler is not None:
+            for _ in range((start_epoch - 1) * len(dataloaders['train'])):
+                step_scheduler.step()
+        if is_cls_loss and 'loss_state_dict' in resume_state:
+            loss_fn.load_state_dict(resume_state['loss_state_dict'])
         print(f"  Resumed optimizer/scheduler at epoch {start_epoch}, "
               f"best selection score {resume_state.get('best_selection_score')}")
 
@@ -580,18 +640,20 @@ def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 
     best_score = float('-inf')
     if resume_state is not None and start_epoch > 1 and resume_state.get('best_selection_score') is not None:
         best_score = float(resume_state['best_selection_score'])
-    history = {'train_loss': [], 'val_loss': [], 'sfm_val_mAP': []}
+    history = {'train_loss': [], 'val_loss': [], 'sfm_val_mAP': [], 'selection': [], 'val_metrics': []}
+    lean = config['system'].get('lean_checkpoints', False)   # search runs: best model weights only
     
     for epoch in range(start_epoch, total_epochs + 1):
         # Train
         train_metrics = trainer.train_epoch(
             train_loader,
             epoch=epoch,
-            log_interval=config['logging']['log_frequency']
+            log_interval=config['logging']['log_frequency'],
+            step_scheduler=step_scheduler
         )
         
-        # Validate
-        if 'val' in dataloaders:
+        # Validate (batch-level loss; skipped for classification losses, whose classes are train-only)
+        if 'val' in dataloaders and not is_cls_loss:
             val_metrics = trainer.validate(
                 dataloaders['val'],
                 epoch=epoch
@@ -611,6 +673,8 @@ def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 
         score, sel = selection_score(model, dataloaders, config, device,
                                      -val_metrics['loss'], logger, 'stage1', epoch)
         history['sfm_val_mAP'].append(sel.get('sfm_val_mAP', float('nan')))
+        history['selection'].append(float(score))
+        history['val_metrics'].append({k: float(v) for k, v in sel.items()})
         is_best = score > best_score
         if is_best:
             best_score = score
@@ -628,11 +692,24 @@ def train_stage1(model, dataloaders, config, device, logger, start_epoch: int = 
             'val_metrics': sel,
             'config': config
         }
-        save_checkpoint(state, os.path.join(ckpt_dir, 'stage1_last.pth'))
-        if is_best:
-            save_checkpoint(state, os.path.join(ckpt_dir, 'stage1_best.pth'))
-        if epoch % config['system']['save_frequency'] == 0:
-            save_checkpoint(state, os.path.join(ckpt_dir, f'stage1_epoch_{epoch}.pth'))
+        if is_cls_loss and not lean:
+            state['loss_state_dict'] = loss_fn.state_dict()
+        if lean:
+            state.pop('optimizer_state_dict')
+            if is_best:
+                save_checkpoint(state, os.path.join(ckpt_dir, 'stage1_best.pth'))
+        else:
+            save_checkpoint(state, os.path.join(ckpt_dir, 'stage1_last.pth'))
+            if is_best:
+                save_checkpoint(state, os.path.join(ckpt_dir, 'stage1_best.pth'))
+            if epoch % config['system']['save_frequency'] == 0:
+                save_checkpoint(state, os.path.join(ckpt_dir, f'stage1_epoch_{epoch}.pth'))
+        sel_file = os.path.join(config['system']['results_dir'], 'selection.json')
+        with open(sel_file, 'w') as fh:
+            json.dump({'best_selection_score': float(best_score),
+                       'best_epoch': int(1 + int(np.argmax(history['selection']))) + start_epoch - 1,
+                       'selection': history['selection'], 'val_metrics': history['val_metrics'],
+                       'train_loss': history['train_loss']}, fh, indent=1)
     
     save_training_curves(history, config['system']['stage1_results_dir'], 'stage1')
     print(f"\nStage 1 completed! Best loss: {best_loss:.4f}")
