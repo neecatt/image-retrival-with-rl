@@ -2,6 +2,27 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### M3. Why DINOv2 forgets and peaks at epoch 2: two training bugs/defects found (2026-10-16)
+**Diagnosis from the checkpoints** (relative change ‖θ − θ₀‖/‖θ₀‖ and weight-norm ratio vs the off-the-shelf model, per group of blocks):
+
+| run | blocks 0–3 weights (should be frozen) | blocks 4–7 weights | blocks 8–11 weights | LayerNorm, blocks 0–3 |
+|---|---|---|---|---|
+| pilot, 3k steps | change 0.048, norm ×0.982 | 0.010, ×0.996 | 0.011, ×0.997 | 0.003, ×0.997 |
+| full run, epoch 2 (selected) | **0.261, ×0.858** | 0.072, ×0.951 | 0.068, ×0.963 | 0.037, ×0.966 |
+| full run, epoch 6 | **0.360, ×0.788** | 0.119, ×0.917 | 0.104, ×0.939 | 0.067, ×0.939 |
+| D2 (lr 1e-5), epoch 6 | 0.601, ×0.576 | 0.341, ×0.762 | 0.304, ×0.801 | 0.225, ×0.798 |
+
+1. **Bug: `model.freeze_blocks` and `model.layer_decay` never took effect.** `torch.compile` wraps the model before the optimizer is built, so parameter names start with `_orig_mod.`; `param_groups` (added in M1) matched none of them and put every parameter in one full-lr group. The logs of the M1 grid and M2 run say `param groups: 1`. Consequences: the "4 frozen blocks" moved the most (blocks 0–3: 26% at epoch 2, 36% at epoch 6), and grid configs that differ only in freezing/decay gave identical results (82.07 vs 82.08). The M1 grid conclusions about freezing/decay and the M2 DINOv2 baseline are invalid as tuned results. Unaffected: ResNet runs, Track V, the forgetting test (no freezing requested), all SfM-120k work.
+2. **Defect: coupled L2 weight decay with Adam on every parameter.** `optim.Adam(weight_decay=1e-4)` adds 1e-4·θ to the gradient before Adam's normalisation, so wherever the loss gradient is small the decay becomes a full-size update and pulls weights to zero at roughly lr per step, including LayerNorm, biases and LayerScale γ (which gate each block). Weight norms shrink steadily (×0.79 in blocks 0–3 by epoch 6), matching SfM val falling after epoch 2. The standard ViT recipe is AdamW (decoupled decay) with no decay on norms, biases, LayerScale and tokens. The same coupled decay was used for all ResNet Stage 1 runs (BatchNorm included).
+3. **Train/test resolution mismatch.** GLDv2 images are stored at long side 512; the default train transform resizes the short side to 492 (≈1.28× upsampling) and random-crops 448², while ROxford/RParis are evaluated at long side 1024.
+
+**Fixes (commit `fix(train): apply ViT freezing and layer decay under torch.compile; ...`)**: names are normalised and a freeze/decay request that matches nothing raises an error (CPU-tested on a compiled model: 9 layer groups, 29.9M frozen parameters, lr 3e-7–3e-6); AdamW with proper no-decay groups; per-step linear warmup + cosine; sub-center ArcFace (79,813 classes × 3 centres, own head lr) as a loss option; loss computed in fp32 under AMP; RandomResizedCrop option; lean checkpoints and a per-run `selection.json`.
+
+**Tuning method from now on (selected only on mean GLDv2+SfM validation):**
+- *Successive halving over a scrambled Sobol sample* (`scripts/hp_search.py`): 16 configurations per backbone; rung 0 = 2 × 750 steps, top third promoted to rung 1 = 3 × 1,500 steps, top two to rung 2 = 4 × 3,000 steps, then a full run of the winner. DINOv2 space: lr 1e-6–3e-5 (log), AdamW weight decay 1e-3–1e-1 (log), layer decay 0.55–1.0, freeze {0, 2, 4, 6, 8} blocks, loss {FastAP, sub-center ArcFace}, head lr 3e-4–3e-3, crop {default, RandomResizedCrop 0.3}. ResNet space: lr 2e-5–5e-4, weight decay, loss, head lr, crop.
+- *WiSE-FT* (`scripts/wise_ft.py`, Wortsman et al. 2022): interpolate pretrained and fine-tuned weights, α chosen on validation; first applied to the existing M2 checkpoints (jobs 4593966–67).
+- Smoke runs of the new path (jobs 4593963–65) before the search.
+
 ### M2. Full-length Stage 1 runs with mean-val selection (jobs 4582323, 4581061; finished 2026-10-16)
 - **DINOv2 CLS, lr 3e-6, 4 frozen blocks, layer decay 0.75, 6 epochs** (12 h 57 min): mean val per epoch 82.36, **82.54**, 81.89, 81.65, 81.55, 81.60 (GLDv2 val keeps rising to 77.5 while SfM val falls from 88.0 to 85.7: forgetting again, now visible to selection). Selected epoch 2: GLDv2 val 77.44 / SfM val 87.63 (at 448 px). Benchmarks: **ROxf M/H 67.20 / 45.65, RPar M/H 90.38 / 79.50**. The short pilot (mean val 82.08) had 71.38 / 51.31 and 91.26 / 81.34: by the selection rule the full run is the DINOv2 baseline, although it is lower on both benchmarks. Validation differences of ~0.5 do not track 70-query benchmark differences reliably.
 - **ResNet50 GLDv2, 20 epochs** (19 h 28 min): mean val rises every epoch to 69.78 (epoch 20). Benchmarks: ROxf M/H 47.72 / 26.16, RPar M/H 74.12 / 53.04, vs 49.93 / 27.15 and 72.27 / 53.79 after 10 epochs (seed 42). No clear gain from doubling the schedule.

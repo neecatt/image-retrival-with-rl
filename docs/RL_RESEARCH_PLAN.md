@@ -72,6 +72,7 @@ Lesson so far: when RL's reward is computable from per-pair labels that a differ
 - Stage 1 / descriptors are tuned to their best on held-out validation only; if an off-the-shelf model beats a fine-tuned one, it is the baseline. Selection now optionally averages several held-out val sets (`training.extra_val_sets`, e.g. GLDv2-clean val + SfM-120k val) so loss of generality is visible.
 - [x] M1 DINOv2 Stage 1 tuning grid done (PROGRESS M1): selected lr 3e-6 / freeze 4 / decay 0.75 (mean val 82.08 vs 75.13 off the shelf); full 6-epoch run job 4582323. Forgetting test: RL not better than FastAP-bank. Track V on DINOv2 replicates the held-out RL advantage (small). Grid was (jobs 4581055–59): lr 1e-5 / 3e-6 / 1e-6, layer decay 0.65 / 0.75, freezing 4 / 6 blocks, no projection (768-d CLS). Off-the-shelf on SfM val: job 4581054. The best on mean validation becomes the DINOv2 baseline.
 - [x] M2 done (PROGRESS M2): DINOv2 full run selects epoch 2 (mean val 82.54; ROxf 67.20 / 45.65, RPar 90.38 / 79.50); ResNet 20 epochs gives no clear gain over 10. Was: ResNet50 GLDv2 Stage 1 with 20 epochs (val was still rising at 10), mean-val selection (job 4581061).
+- [ ] M3a Forgetting investigation (PROGRESS M3): freeze/decay bug under torch.compile fixed; coupled Adam L2 replaced by AdamW option; successive-halving Sobol search (DINOv2 16 configs, ResNet 16 configs) and WiSE-FT set up; smoke 4593963–65, WiSE-FT 4593966–67
 - [ ] M3 Evaluation upgrades applied equally to all arms: multi-scale testing and learned whitening (fit on training data only).
 
 **Later**
