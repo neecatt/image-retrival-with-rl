@@ -2,6 +2,23 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### R3. RL vs surrogates on the new ResNet baseline, 5 seeds with final evaluation (jobs 4606162-76)
+All arms lr 1e-6, all-vs-all batches + bank, 2 x 1,432 steps, mean-val selection; init = new ResNet Stage 1 of the same seed.
+
+| model (5 seeds, mean +- std) | GLDv2 val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|
+| new ResNet Stage 1 | 64.15 +- 0.06 | 52.77 +- 1.24 | 28.11 +- 2.87 | 77.33 +- 1.68 | 57.73 +- 1.71 |
+| + PL RL | 64.36 +- 0.14 | 55.45 +- 1.48 | 28.47 +- 3.25 | 78.80 +- 1.04 | 59.76 +- 0.96 |
+| **+ FastAP-bank** | **64.55 +- 0.12** | **56.06 +- 1.41** | **30.31 +- 2.94** | **79.49 +- 1.02** | **60.70 +- 1.03** |
+| + Smooth-AP | 63.96 +- 0.12 | 55.56 +- 1.81 | 29.24 +- 3.00 | 78.81 +- 0.98 | 59.83 +- 0.73 |
+
+Paired over 5 seeds, mean +- std (t):
+- **PL RL - FastAP-bank:** val -0.19 (t -10.6), ROxf M -0.60 +- 0.83 (t -1.6), **ROxf H -1.85 +- 0.70 (t -5.9), RPar M -0.69 +- 0.23 (t -6.6), RPar H -0.94 +- 0.27 (t -8.0)**; FastAP-bank is better in every seed on RParis and ROxford Hard.
+- PL RL - Smooth-AP: within +-0.1 except ROxf H -0.77 (t -5.2).
+- PL RL - Stage 1: ROxf M +2.69 (t 4.4), RPar M +1.47, RPar H +2.03; FastAP-bank - Stage 1: ROxf M +3.29, ROxf H +2.20, RPar M +2.16, RPar H +2.97.
+- **Same conclusion on the stronger baseline as in G10:** reward-tuning the descriptor with the PL policy improves the model, but a matched FastAP-bank surrogate improves it more, now significantly on three of four protocols.
+- R1M evaluation of the baselines first failed on a truncated official JPEG (fixed: decoded with padding and counted, commit `fix(eval): decode truncated R1M JPEGs...`), resubmitted as jobs 4606886-88. Track V on the new ResNet descriptor: attention policies submitted.
+
 ### R2. RL vs surrogates on the new ResNet baseline: seed-42 grid (jobs 4605723-31, 32-34 min each)
 Init: new ResNet Stage 1 seed 42 (`gr_full_c02_e10_seed42`, mean GLDv2+SfM val 71.42). All arms: all-vs-all batches of 128 + 4,096 bank, 2 x 1,432 steps, selection on mean val.
 
