@@ -8,6 +8,7 @@ What was found, what was changed, and the evidence. Newest entries at the top. M
 - **No re-encoding:** the images are already at most 1024 px on the long side (checked on archive 1: 510 images, max side 1024, all in the official list), so `scripts/eval_r1m.py` streams the original archives in DataLoader workers and resizes to long side 1024 exactly like the database images. R1M embeddings are cached per model on WORK. `scripts/prepare_r1m.py` (resize/repack) exists but is not used.
 - **Protocol:** database = dataset images + all R1M images; positives/junk from the Revisited ground truth; official AP. Results with and without R1M are reported.
 - **Queued after the download:** new ResNet baseline (seed 42), DINOv2 baseline (6-epoch run + WiSE-FT 0.7) and off-the-shelf DINOv2.
+- **Download incident (2026-10-17 21:15):** I mistook a moment with no active transfers (all four were verifying) for a dead download and started a second copy. Both wrote to archives 27–30; the size check caught it (sizes up to 9.5 GB vs 5 GB expected), the files were deleted and are being re-downloaded, and the duplicate session was killed within minutes. Only archives passing the size + gzip check get an `.ok` marker.
 - **Use as a locked evaluation:** R1M results are reported for final models only and are not used for any selection or tuning.
 
 ### M9. WiSE-FT on the final DINOv2 candidates (jobs 4602053-55, 2026-10-17)
