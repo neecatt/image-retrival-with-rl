@@ -2,6 +2,21 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### M7. Full-length winner runs finished (2026-10-17; jobs 4596033-38)
+**ResNet50, new recipe (AdamW lr 7.5e-5, wd 0.009, warmup 2,000 + cosine, RandomResizedCrop 0.3, 10 epochs), 5 seeds:**
+
+| | GLDv2 val (512 px) | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|
+| old GLDv2 Stage 1 (Adam, no warmup, 5 seeds; G8) | 63.01 +- 0.16 | 47.93 +- 1.90 | 24.88 +- 2.93 | 74.22 +- 1.44 | 54.73 +- 0.58 |
+| **new recipe (5 seeds)** | **64.15 +- 0.06** | **52.77 +- 1.24** | **28.11 +- 2.87** | **77.33 +- 1.68** | **57.73 +- 1.71** |
+
+Per seed (final): seed 42 52.14 / 25.11, 77.37 / 57.82; seed 1 53.20 / 28.56, 79.23 / 60.02; seed 2 54.32 / 31.83, 76.17 / 56.47; seed 3 53.14 / 29.68, 75.21 / 55.70; seed 4 51.03 / 25.38, 78.70 / 58.62. Mean val (GLDv2+SfM) per epoch rises monotonically to 71.4-71.6 in every seed (best epoch 10, seed 4: 9), no early peak. **The new recipe is a clearly stronger baseline** (+4.8 ROxf M, +3.2 ROxf H, +3.1 RPar M, +3.0 RPar H; every new seed above every old seed on RParis M except one). It replaces the old ResNet Stage 1 as the baseline for all RL comparisons.
+
+**DINOv2 CLS, c04 recipe, 6 epochs x full passes (seed 42):** mean val per epoch 82.20, 82.08, 82.11, 82.21, 82.44, **82.45**; GLDv2 val 77.01 -> 78.56 (rising) while SfM val 87.40 -> 86.33 (falling); train loss 0.131 -> 0.054. Final: GLDv2 val 78.58, **ROxf M/H 61.98 / 43.15, RPar M/H 90.04 / 78.33**. Compared with off the shelf (64.51 / 41.81, 88.29 / 75.24): ROxf Medium is lower, the other three are higher.
+- **Long fine-tuning still forgets, in a way the working freeze/decay and AdamW do not prevent:** the validation signals disagree after the first epoch (in-domain GLDv2 val up, SfM val down). The one-pass rung-2 run of the same recipe scored higher on mean val (83.16) than this 6-epoch run (82.45), so on validation a short schedule is better for DINOv2 (ResNet keeps improving with length).
+- **Selection caveat (declared):** the mean of GLDv2 val and SfM val is a questionable selection rule for DINOv2 because the two move in opposite directions. Comparing earlier results with the benchmarks shows SfM val tracking ROxford Medium much better than GLDv2 val does (e.g. SfM val 86.3 / 86.9 / 87.6 / 88.5 -> ROxf M 62.0 / 64.5 / 67.2 / 71.4). That observation comes from looking at benchmark numbers, so any change of selection rule based on it is informed by the test set; it must be declared, and the final claims should be confirmed on an evaluation that played no role in any decision (R1M, held-out identities, or the GLDv2 official retrieval set).
+- **Next (submitted):** WiSE-FT on the one-pass rung-2 winner (4602053) and on the 6-epoch run (4602054), with final evaluation, and the raw benchmark evaluation of the rung-2 winner (4602055).
+
 ### M6. Search rung 2 and full-length winner runs (2026-10-17)
 Rung 2 (4 x 3,000 steps, about one GLDv2 pass; mean GLDv2+SfM val, per epoch, best last): DINOv2 **c04 83.16** (81.82 82.49 82.95 83.16), c00 83.12, c10 (lr 4e-6) 82.92; ResNet50 **c02 65.86** (59.00 62.78 65.20 65.86), c11 65.86, c09 (lr 3.8e-5) 65.33. Winners tie again within noise, so the choice is by the pre-set rule (top score, ties by lower lr).
 - **Final recipes:** DINOv2 CLS (768-d, no projection), AdamW lr 1.1e-5, weight decay 0.018, layer decay 0.83, 4 frozen blocks, FastAP, default crop, 448 px; ResNet50 + GeM + 512-d projection, AdamW lr 7.5e-5, weight decay 0.009, FastAP, RandomResizedCrop(0.3), 512 px; both batch 128, 2,000 warmup steps then cosine to zero per step, mean-val selection.
