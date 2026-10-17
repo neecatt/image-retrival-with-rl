@@ -2,6 +2,18 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### R2. RL vs surrogates on the new ResNet baseline: seed-42 grid (jobs 4605723-31, 32-34 min each)
+Init: new ResNet Stage 1 seed 42 (`gr_full_c02_e10_seed42`, mean GLDv2+SfM val 71.42). All arms: all-vs-all batches of 128 + 4,096 bank, 2 x 1,432 steps, selection on mean val.
+
+| arm | lr 3e-7 | lr 1e-6 | lr 3e-6 |
+|---|---|---|---|
+| PL RL (AP@100 reward) | 72.39 | **72.53** | 71.73 |
+| FastAP-bank | 72.42 | **72.53** | 70.11 |
+| Smooth-AP | 72.08 | 72.09 | 70.52 |
+
+- Every arm improves on the init by about +1.1 mean val at lr 1e-6, and **PL RL and FastAP-bank tie exactly (72.53)**; Smooth-AP is 0.4 lower. Too high an lr (3e-6) hurts every arm, the surrogates more than RL.
+- **5 seeds with final evaluation submitted** (lr 1e-6 for all three arms, seeds 42/1/2/3/4, `r2cmp_*`).
+
 ### L1. R1M distractors for a locked evaluation (2026-10-17)
 - **Source:** the official revisitop scripts (github.com/filipradenovic/revisitop): 100 archives `http://ptak.felk.cvut.cz/revisitop/revisitop1m/jpg/revisitop1m.{1..100}.tar.gz` and the list `revisitop1m.txt` (1,001,001 images). No official checksums or licence statement exist; we check each archive's size against the server and `gzip -t`, and record our own sha256 (`*.ok` files).
 - **Size and location:** 476 GB, too large for HPCVAULT (double-charged, would exceed the hard limit), so stored packed on WORK (`$WORK/datasets/revisitop1m/raw`; WORK has 10.7 TB and only the file count was tight, which 100 archives do not affect). WORK has no backup; the data is re-downloadable with `fetch.sh` there.
