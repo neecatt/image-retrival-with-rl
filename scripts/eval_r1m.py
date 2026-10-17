@@ -10,14 +10,14 @@ its longer side is --size (1024 in the protocol), exactly as the database images
 R1M embeddings are cached per model (fp16, order = official revisitop1m.txt), because they are the
 expensive part (~1M forward passes at 1024 px). Results without distractors are reported alongside.
 """
-import argparse, hashlib, json, sys, tarfile, time
+import argparse, hashlib, io, json, sys, tarfile, time
 from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 import torchvision.transforms as T
-from PIL import Image
+from PIL import Image, ImageFile
 from torch.utils.data import DataLoader, IterableDataset, get_worker_info
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -43,8 +43,18 @@ class R1MStream(IterableDataset):
                     if not m.isreg() or not m.name.lower().endswith('.jpg'):
                         continue
                     rel = '/'.join(m.name.split('/')[-2:])
-                    img = Image.open(t.extractfile(m)).convert('RGB')
-                    yield self.tf(img), self.index[rel]
+                    data = t.extractfile(m).read()
+                    truncated = 0
+                    try:
+                        img = Image.open(io.BytesIO(data)).convert('RGB')
+                    except OSError:
+                        # a few official R1M JPEGs are truncated: decode what is there (PIL pads the
+                        # missing part), keep the image as a distractor, and count it
+                        ImageFile.LOAD_TRUNCATED_IMAGES = True
+                        img = Image.open(io.BytesIO(data)).convert('RGB')
+                        ImageFile.LOAD_TRUNCATED_IMAGES = False
+                        truncated = 1
+                    yield self.tf(img), self.index[rel], truncated
 
 
 @torch.no_grad()
@@ -57,7 +67,10 @@ def r1m_embeddings(model, a, dev, tag):
     out, seen = None, np.zeros(len(names), dtype=bool)
     loader = DataLoader(R1MStream(a.r1m_dir, a.size, index), batch_size=1, num_workers=a.workers, pin_memory=True)
     t0 = time.time()
-    for k, (x, i) in enumerate(loader):
+    n_trunc, trunc_names = 0, []
+    for k, (x, i, tr) in enumerate(loader):
+        if int(tr):
+            n_trunc += 1; trunc_names.append(names[int(i)])
         v = F.normalize(model(x.to(dev, non_blocking=True)).float(), dim=1).cpu().numpy()[0]
         if out is None:
             out = np.zeros((len(names), v.shape[0]), dtype=np.float16)
@@ -68,6 +81,8 @@ def r1m_embeddings(model, a, dev, tag):
         raise RuntimeError(f"{(~seen).sum()} R1M images listed in revisitop1m.txt were not found in the archives")
     Path(a.cache_dir).mkdir(parents=True, exist_ok=True)
     np.save(cache, out)
+    Path(str(cache) + '.truncated.json').write_text(json.dumps({'truncated': n_trunc, 'names': trunc_names}))
+    print(f"  {n_trunc} truncated R1M JPEGs decoded with padding: {trunc_names[:10]}", flush=True)
     print(f"  R1M embedded in {(time.time() - t0) / 60:.1f} min -> {cache}", flush=True)
     return out.astype(np.float32)
 
