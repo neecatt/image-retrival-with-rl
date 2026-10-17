@@ -2,6 +2,29 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### M9. WiSE-FT on the final DINOv2 candidates (jobs 4602053-55, 2026-10-17)
+Mean of GLDv2 val and SfM val, by interpolation weight alpha (0 = off-the-shelf, 1 = fine-tuned):
+
+| alpha | 0 | 0.2 | 0.4 | 0.5 | 0.6 | 0.7 | 0.8 | 0.9 | 1.0 |
+|---|---|---|---|---|---|---|---|---|---|
+| one-pass rung-2 winner (c04) | 75.16 | 79.03 | 81.75 | 82.61 | 83.18 | 83.47 | **83.54** | 83.43 | 83.16 |
+| 6-epoch full run (c04) | 75.16 | 79.53 | 82.52 | 83.42 | 83.95 | **84.12** | 83.92 | 83.36 | 82.45 |
+
+Benchmarks (not used for selection), ROxford M/H, RParis M/H:
+
+| model | mean val | ROxf M / H | RPar M / H |
+|---|---|---|---|
+| off the shelf (alpha 0) | 75.16 | 64.51 / 41.81 | 88.29 / 75.24 |
+| rung-2 c04 raw (alpha 1) | 83.16 | 68.86 / 47.65 | 90.88 / 80.74 |
+| rung-2 c04 WiSE-FT alpha 0.8 | 83.54 | 70.14 / 49.39 | 91.25 / 81.57 |
+| 6-epoch run raw (alpha 1) | 82.45 | 61.98 / 43.15 | 90.04 / 78.33 |
+| **6-epoch run WiSE-FT alpha 0.7 (selected by rule)** | **84.12** | 68.14 / 48.67 | 91.11 / 80.67 |
+| (M4) buggy 2-epoch run WiSE-FT alpha 0.7 | 83.41 | 72.14 / 51.38 | 91.85 / 82.94 |
+
+- **WiSE-FT helps both candidates** (+0.4 / +1.7 mean val over the raw fine-tuned models) and almost cancels the damage of long training (6-epoch run: ROxf M 61.98 -> 68.14).
+- **By the pre-declared rule (highest mean validation) the DINOv2 baseline is the 6-epoch run with WiSE-FT alpha 0.7** (84.12): ROxf M/H 68.14 / 48.67, RPar M/H 91.11 / 80.67, versus 64.51 / 41.81 and 88.29 / 75.24 off the shelf (+3.6 / +6.9, +2.8 / +5.4).
+- **Validation and benchmarks still disagree about the ranking:** the model with the best mean validation (84.12) has lower ROxford than the one-pass interpolation (70.14) and than the earlier buggy-run interpolation (72.14, mean val 83.41). Mean validation, which includes in-domain GLDv2 val, is not a reliable proxy for ROxford Medium among strong DINOv2 candidates. No selection is changed because of this; it is a limitation to report, and the claims on DINOv2 need a locked evaluation.
+
 ### M8. Vault cleanup (2026-10-17, at the user's request)
 - **Deleted 161 checkpoint directories on `$HPCVAULT/runs` (94.5 GB apparent, about 182 GB charged; quota 1,663 -> 1,481 GB of 2,097 GB hard):** all hyperparameter-search runs except the DINOv2 rung-2 trio, the pilot, smoke and debug runs, the RL tuning grids (p1_*, pl_*, sm_*, g_pl_*, g_sm_*, g_sap_*, g_fapb_*, g_ml_*, fromsm_*, gd0_*, gfromfapb_*, glong_*, grid_*, nv_*, nv2_*), the two DINOv2 Stage 1 runs with the freeze/decay bug, the 20-epoch ResNet run and the A0 embedding caches. Names and sizes are listed in `results/deleted_checkpoints_2026-10-17.txt`. All their metrics, configs and histories remain in `results/runs/` and in this file; only the weights were removed.
 - **Kept (final-result artifacts):** all Stage 1 baselines (s1_b32_*, g_s1_b128_lr1e-4_seed*, gr_full_*, gd_full_*, gn_*, gnc_*), the final comparison runs (cmp_*, gcmp_*), Track V data, WiSE-FT outputs, the stage-0 checkpoint and the DINOv2 rung-2 winners.
