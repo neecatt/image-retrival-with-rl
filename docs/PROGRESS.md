@@ -2,6 +2,14 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### L1. R1M distractors for a locked evaluation (2026-10-17)
+- **Source:** the official revisitop scripts (github.com/filipradenovic/revisitop): 100 archives `http://ptak.felk.cvut.cz/revisitop/revisitop1m/jpg/revisitop1m.{1..100}.tar.gz` and the list `revisitop1m.txt` (1,001,001 images). No official checksums or licence statement exist; we check each archive's size against the server and `gzip -t`, and record our own sha256 (`*.ok` files).
+- **Size and location:** 476 GB, too large for HPCVAULT (double-charged, would exceed the hard limit), so stored packed on WORK (`$WORK/datasets/revisitop1m/raw`; WORK has 10.7 TB and only the file count was tight, which 100 archives do not affect). WORK has no backup; the data is re-downloadable with `fetch.sh` there.
+- **No re-encoding:** the images are already at most 1024 px on the long side (checked on archive 1: 510 images, max side 1024, all in the official list), so `scripts/eval_r1m.py` streams the original archives in DataLoader workers and resizes to long side 1024 exactly like the database images. R1M embeddings are cached per model on WORK. `scripts/prepare_r1m.py` (resize/repack) exists but is not used.
+- **Protocol:** database = dataset images + all R1M images; positives/junk from the Revisited ground truth; official AP. Results with and without R1M are reported.
+- **Queued after the download:** new ResNet baseline (seed 42), DINOv2 baseline (6-epoch run + WiSE-FT 0.7) and off-the-shelf DINOv2.
+- **Use as a locked evaluation:** R1M results are reported for final models only and are not used for any selection or tuning.
+
 ### M9. WiSE-FT on the final DINOv2 candidates (jobs 4602053-55, 2026-10-17)
 Mean of GLDv2 val and SfM val, by interpolation weight alpha (0 = off-the-shelf, 1 = fine-tuned):
 
