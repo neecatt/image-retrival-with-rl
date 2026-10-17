@@ -2,6 +2,11 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### M8. Vault cleanup (2026-10-17, at the user's request)
+- **Deleted 161 checkpoint directories on `$HPCVAULT/runs` (94.5 GB apparent, about 182 GB charged; quota 1,663 -> 1,481 GB of 2,097 GB hard):** all hyperparameter-search runs except the DINOv2 rung-2 trio, the pilot, smoke and debug runs, the RL tuning grids (p1_*, pl_*, sm_*, g_pl_*, g_sm_*, g_sap_*, g_fapb_*, g_ml_*, fromsm_*, gd0_*, gfromfapb_*, glong_*, grid_*, nv_*, nv2_*), the two DINOv2 Stage 1 runs with the freeze/decay bug, the 20-epoch ResNet run and the A0 embedding caches. Names and sizes are listed in `results/deleted_checkpoints_2026-10-17.txt`. All their metrics, configs and histories remain in `results/runs/` and in this file; only the weights were removed.
+- **Kept (final-result artifacts):** all Stage 1 baselines (s1_b32_*, g_s1_b128_lr1e-4_seed*, gr_full_*, gd_full_*, gn_*, gnc_*), the final comparison runs (cmp_*, gcmp_*), Track V data, WiSE-FT outputs, the stage-0 checkpoint and the DINOv2 rung-2 winners.
+- **Not touched: datasets (656 GB apparent), dominated by the raw GLDv2 archives (498 GB).** They can be re-downloaded in about two hours but are needed for any repacking at another resolution or for the full-GLDv2 verifier experiments, so deleting them is a separate decision.
+
 ### M7. Full-length winner runs finished (2026-10-17; jobs 4596033-38)
 **ResNet50, new recipe (AdamW lr 7.5e-5, wd 0.009, warmup 2,000 + cosine, RandomResizedCrop 0.3, 10 epochs), 5 seeds:**
 
