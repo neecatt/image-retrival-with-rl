@@ -2,6 +2,23 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### L2. First R1M result and Track V on the new ResNet descriptor (2026-10-18)
+**R1M (job 4606886, 69 min; R1M embedded in 67 min at 248 img/s):** new ResNet baseline seed 42, ROxford M/H **52.14 / 25.11 -> 36.38 / 10.49 with R1M**, RParis M/H **77.37 / 57.82 -> 44.12 / 22.41 with R1M**. 63 of the 1,001,001 official R1M JPEGs are truncated and were decoded with padding (list next to the embedding cache on WORK). DINOv2 R1M jobs (4606887-88) run at ~31 img/s (about 9 h for R1M).
+
+**Track V on the new ResNet descriptor** (`gr_full_c02_e10_seed42`; precompute 4605732, 50 min; attention policies 4606889-90; 10,000 GLDv2 queries; lr per method chosen on gld_val at B = 20: classifier 1e-3, value 3e-4, RL 3e-4):
+
+| B | method | gld_val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|---|
+| 0 | none | 62.51 | 52.15 | 25.11 | 77.36 | 57.82 |
+| 20 | top-B | 64.39 | 57.45 | 33.28 | 77.54 | 57.96 |
+| 20 | classifier | 65.89 | 61.75 | 36.62 | 77.72 | 58.09 |
+| 20 | value | 65.88 | 61.85 | 36.44 | 77.78 | 58.15 |
+| 20 | **RL** | **65.96** | **62.76** | **37.03** | **77.80** | 58.13 |
+| 100 | verify all | 63.84 | 64.98 | 40.04 | 78.65 | 59.11 |
+
+Paired bootstrap at B = 20 (same lr 3e-4): RL - classifier ROxf M **+1.12 [+0.61, +1.73]** (30 better / 3 worse), gld_val **+0.14 [+0.06, +0.21]**; RL - value ROxf M **+0.91 [+0.24, +1.87]**, ROxf H **+0.59 [+0.09, +1.20]**, gld_val +0.08 [+0.00, +0.16]. At lr 1e-3 the same picture (ROxf M +1.02 and +0.88, both CIs > 0). At B = 10 the methods tie, except RL - value ROxf H -1.91 [-4.24, -0.04] at lr 3e-4. RParis ties (near the verify-all ceiling).
+- **The Track V result replicates on a third descriptor:** with 20 verifications RL beats both learned baselines on ROxford Medium by about +1 (significant), +5.3 over standard top-20 re-ranking and +10.6 over no verification. The margins on held-out GLDv2 queries are small (+0.1).
+
 ### R3. RL vs surrogates on the new ResNet baseline, 5 seeds with final evaluation (jobs 4606162-76)
 All arms lr 1e-6, all-vs-all batches + bank, 2 x 1,432 steps, mean-val selection; init = new ResNet Stage 1 of the same seed.
 
