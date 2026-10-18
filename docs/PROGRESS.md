@@ -2,6 +2,18 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### L4. Storage incident and Track V-D setup (2026-10-18, results pending)
+**Vault quota:** vault was at 1,512 GB charged (soft 1,049 GB, grace ending within hours; vault charges ~2x apparent size). The 500 raw GLDv2 train tars (499 GB) moved to WORK `/home/atuin/b268dc/b268dc21/datasets/gldv2/train`, each copied, checked against its official md5 and only then removed from vault (no mismatches). Vault now 472.5 GB; scripts read the tars from WORK.
+
+**Track V-D (fixing the B10 + R1M failure of L3, and strengthening every learned method equally):**
+- Distractors for training: all 909,836 full-GLDv2 images of the 121,781 landmarks absent from GLDv2-clean (`scripts/prepare_gldv2_distractors.py`, packed at 512 px to WORK `datasets/gldv2d`; job 4615045). Never relevant to a GLDv2-clean val query; R1M stays test-only.
+- Shortlists of the same 10,000 GLDv2 val queries over [val pool, distractors] (`scripts/v_precompute_dist.py`; compact AP tables checked against `query_tables`; inliers reused from the plain run): new ResNet 4615046, DINOv2 WiSE-FT 4615047. DINOv2 + R1M benchmark shortlists: 4614749.
+- Policies train on plain + distractor shortlists; selection = mean gld_val over both. Evaluation: ROxf/RPar with and without R1M.
+- All learned methods get the new scale-invariant features (`--feat v2`) and the same lr grid {1e-3, 3e-4, 1e-4} x 2 variants = 6 configurations each, chosen per method on validation:
+  - A: every method from scratch, 6,000 updates (matched).
+  - B: classifier and value with DAgger states (their own policy's rollouts), 6,000 updates; RL warm-started from the selected classifier of the same seed + 3,000 reward-tuning updates (the pretrain-then-tune recipe of the original framework). Validation curves are saved so the baselines' plateau can be checked.
+- Jobs: new ResNet 4615051-56, DINOv2 4615057-62 (3 policy seeds, budgets 5/10/20).
+
 ### L3. Track V with R1M distractors, Track V on DINOv2 WiSE-FT, DINOv2 R1M (2026-10-18)
 **R1M baselines (jobs 4606887-88, ~9 h each at ~31 img/s):**
 
