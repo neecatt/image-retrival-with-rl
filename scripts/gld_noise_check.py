@@ -62,7 +62,7 @@ def read_image(src, entry):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--src', default='/home/vault/b268dc/b268dc21/datasets/gldv2')
+    ap.add_argument('--src', default='/home/atuin/b268dc/b268dc21/datasets/gldv2')
     ap.add_argument('--split_pkl', default='/home/vault/b268dc/b268dc21/datasets/gldv2c/gldv2c.pkl')
     ap.add_argument('--out', default='results/f0_gld_noise')
     ap.add_argument('--landmarks', type=int, default=2000)
