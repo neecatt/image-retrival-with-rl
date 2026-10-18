@@ -64,7 +64,7 @@ def process(job):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--src', default='/home/vault/b268dc/b268dc21/datasets/gldv2')
+    ap.add_argument('--src', default='/home/atuin/b268dc/b268dc21/datasets/gldv2')
     ap.add_argument('--out', default='/home/vault/b268dc/b268dc21/datasets/gldv2c')
     ap.add_argument('--size', type=int, default=512)
     ap.add_argument('--val_landmarks', type=int, default=1500)

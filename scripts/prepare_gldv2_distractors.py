@@ -20,7 +20,7 @@ from prepare_gldv2 import init, process   # noqa: E402
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--src', default='/home/vault/b268dc/b268dc21/datasets/gldv2')
+    ap.add_argument('--src', default='/home/atuin/b268dc/b268dc21/datasets/gldv2')
     ap.add_argument('--clean_pkl', default='/home/vault/b268dc/b268dc21/datasets/gldv2c/gldv2c.pkl')
     ap.add_argument('--out', default='/home/atuin/b268dc/b268dc21/datasets/gldv2d')
     ap.add_argument('--size', type=int, default=512)
