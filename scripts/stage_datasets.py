@@ -21,7 +21,10 @@ SPEC = {
     'gldv2c':    ([f'shards/gldv2c_{n:03d}.tar' for n in range(500)], ['gldv2c.pkl'], 120 << 30),
     # noisy-label GLDv2 pool (scripts/prepare_gldv2_noisy.py)
     'gldv2n':    ([f'shards/gldv2n_{n:03d}.tar' for n in range(500)], ['gldv2n.pkl'], 80 << 30),
+    # GLDv2 distractors: landmarks absent from GLDv2-clean (scripts/prepare_gldv2_distractors.py), on WORK
+    'gldv2d':    ([f'shards/gldv2d_{n:03d}.tar' for n in range(500)], ['gldv2d.pkl'], 110 << 30),
 }
+ROOTS = {'gldv2d': Path('/home/atuin/b268dc/b268dc21/datasets')}   # datasets not under SRC
 
 def die(msg):
     sys.exit(f"ERROR: {msg}")
@@ -35,7 +38,7 @@ def extract(archive, jpg, name):
             parts = [p for p in m.name.split('/') if p not in ('', '.')]
             if not m.isreg() or m.name.startswith('/') or '..' in parts or not parts:
                 die(f"unsafe member {m.name!r} in {archive}")
-            if name in ('gldv2c', 'gldv2n'):
+            if name in ('gldv2c', 'gldv2n', 'gldv2d'):
                 if not GLD_RE.match(m.name):
                     die(f"unexpected gldv2c member {m.name!r}")
                 rel = Path(*parts)
@@ -74,17 +77,18 @@ def main():
     manifest = {}
     for name in a.datasets:
         archives, metas, _ = SPEC[name]
+        base = ROOTS.get(name, SRC) / name
         for f in archives + metas:
-            if not (SRC / name / f).is_file():
-                die(f"missing {SRC/name/f}")
+            if not (base / f).is_file():
+                die(f"missing {base/f}")
         jpg = root / name / 'jpg'
         jpg.mkdir(parents=True, exist_ok=True)
         t0, n = time.time(), 0
         for arc in archives:
-            n += extract(SRC / name / arc, jpg, name)
+            n += extract(base / arc, jpg, name)
         for f in metas:
-            shutil.copy2(SRC / name / f, root / name / f)
-        manifest[name] = {'files': n, 'archives': {x: (SRC/name/x).stat().st_size for x in archives},
+            shutil.copy2(base / f, root / name / f)
+        manifest[name] = {'files': n, 'archives': {x: (base / x).stat().st_size for x in archives},
                           'seconds': round(time.time() - t0, 1)}
         print(f"{name}: extracted {n} files in {manifest[name]['seconds']} s")
     (root / 'stage_manifest.json').write_text(json.dumps(manifest, indent=2))
