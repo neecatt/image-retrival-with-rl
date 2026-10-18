@@ -74,6 +74,7 @@ Lesson so far: when RL's reward is computable from per-pair labels that a differ
 - [x] M2 done (PROGRESS M2): DINOv2 full run selects epoch 2 (mean val 82.54; ROxf 67.20 / 45.65, RPar 90.38 / 79.50); ResNet 20 epochs gives no clear gain over 10. Was: ResNet50 GLDv2 Stage 1 with 20 epochs (val was still rising at 10), mean-val selection (job 4581061).
 - [ ] M3a Forgetting investigation (PROGRESS M3): freeze/decay bug under torch.compile fixed; coupled Adam L2 replaced by AdamW option; successive-halving Sobol search (DINOv2 16 configs, ResNet 16 configs) and WiSE-FT set up; smoke 4593963–65, WiSE-FT 4593966–67
 - [ ] R2 RL comparisons rebuilt on the new baselines (user rule: RL measured on the strongest honest baseline). ResNet (new recipe, `gr_full_c02_e10_seed42`): PL RL vs FastAP-bank vs Smooth-AP, lr 3e-7 / 1e-6 / 3e-6 each, mean GLDv2+SfM val selection (jobs 4605723-31); Track V precompute on the new descriptor (4605732). Then 5 seeds of the best setting of each arm with final evaluation, and the same for DINOv2 (WiSE-FT baseline).
+- [ ] V+R1M: Track V with benchmark shortlists over database + R1M (`scripts/v_precompute_r1m.py`; only shortlisted R1M images are extracted and verified), new ResNet seed 42: precompute 4608533, policies 4608534-35 (attention, lr 1e-3 / 3e-4, trained on GLDv2 as before). Track V on the DINOv2 baseline (6-epoch + WiSE-FT 0.7): precompute 4608536, policies 4608537-38
 - [ ] M3 Evaluation upgrades applied equally to all arms: multi-scale testing and learned whitening (fit on training data only).
 
 **Later**
