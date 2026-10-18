@@ -2,6 +2,52 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### L3. Track V with R1M distractors, Track V on DINOv2 WiSE-FT, DINOv2 R1M (2026-10-18)
+**R1M baselines (jobs 4606887-88, ~9 h each at ~31 img/s):**
+
+| model | ROxf M / H | + R1M | RPar M / H | + R1M |
+|---|---|---|---|---|
+| new ResNet Stage 1 seed 42 (L2) | 52.14 / 25.11 | 36.38 / 10.49 | 77.37 / 57.82 | 44.12 / 22.41 |
+| DINOv2 ViT-B/14 CLS, off the shelf | 64.51 / 41.81 | 51.16 / 24.85 | 88.29 / 75.24 | 72.63 / 52.61 |
+| **DINOv2 Stage 1 + WiSE-FT α 0.7 (baseline by rule)** | **68.14 / 48.67** | **58.44 / 36.52** | **91.11 / 80.67** | **83.02 / 66.17** |
+
+**Track V + R1M, new ResNet descriptor** (precompute 4608533, 19 min: shortlists over database + R1M, 3,787 R1M images extracted from the archives in 14 min; policies 4608534-35 = the L2 policies, same data and seeds, gld_val numbers identical, re-evaluated on the new shortlists). R1M fills 48% of the ROxford and 33% of the RParis top-100; only 2.4% of the R1M shortlist items reach 35 inliers. lr per method chosen on gld_val (B10 and B20: classifier 1e-3, value 3e-4, RL 3e-4):
+
+| B | method | gld_val | ROxf+1M M | ROxf+1M H | RPar+1M M | RPar+1M H |
+|---|---|---|---|---|---|---|
+| 0 | none | 62.51 | 36.38 | 10.49 | 44.14 | 22.38 |
+| 10 | top-B | 63.61 | 40.99 | 15.81 | 44.31 | 22.52 |
+| 10 | classifier | 65.07 | **45.20** | 20.43 | 44.85 | 22.56 |
+| 10 | value | 65.31 | 44.15 | **20.70** | 45.11 | 22.52 |
+| 10 | RL | **65.41** | 40.45 | 15.75 | **45.17** | **22.61** |
+| 20 | top-B | 64.39 | 43.20 | 19.04 | 44.54 | 22.65 |
+| 20 | classifier | 65.89 | 48.13 | 22.51 | 45.40 | 22.78 |
+| 20 | value | 65.88 | 48.31 | 22.93 | **45.78** | 22.94 |
+| 20 | **RL** | **65.96** | **49.02** | **23.02** | 45.76 | **22.97** |
+| 100 | verify all | 63.84 | 51.20 | 26.07 | 46.93 | 24.18 |
+
+Paired bootstrap, RL - baseline, each at its selected lr:
+- B20: vs classifier ROxf M **+0.89 [+0.30, +1.49]**, RPar M **+0.36 [+0.15, +0.56]**, ROxf H +0.52 [-0.23, +1.38]; vs value ROxf M **+0.71 [+0.05, +1.54]**, others tie.
+- **B10: vs classifier ROxf M -4.76 [-8.85, -1.31], ROxf H -4.68 [-9.57, -0.74]; vs value ROxf M -3.70 [-7.44, -0.68], H -4.95 [-9.75, -0.91]** (RL barely above top-10). Without R1M the same B10 policies tie (L2).
+
+Diagnosis (`scripts/analysis/trackv_selection_stats.py`, saved policies rerun greedily, 3 seeds): RL and value learned on GLDv2 to verify deep in the shortlist (mean verified rank 27-31 at B10, half beyond rank 20; classifier 9, top-B 4.5). With R1M the similarity scale of the shortlist shifts (ROxf mean sim at rank 100: 0.62 -> 0.72) and the deep items are often distractors; at B10 RL's hit rate falls to 0.56 (classifier 0.61) and it verifies 33% of the shortlist positives (classifier 43%). The policies never saw distractor-filled shortlists in training (GLDv2 val pool, 21k images); the failure is a train/test shift that the gld_val selection cannot see.
+
+**Track V on the DINOv2 WiSE-FT baseline** (precompute 4608536, 59 min; policies 4608537-38; lr chosen per method on gld_val: B20 classifier 1e-3, value 3e-4, RL 3e-4):
+
+| B | method | gld_val | ROxf M | ROxf H | RPar M | RPar H |
+|---|---|---|---|---|---|---|
+| 0 | none | 78.10 | 68.15 | 48.67 | 91.09 | 80.67 |
+| 20 | top-B | 78.25 | 71.41 | 52.53 | 91.24 | 80.81 |
+| 20 | classifier | 78.82 | **73.89** | 53.57 | **91.27** | 80.80 |
+| 20 | value | 78.75 | 73.36 | 53.91 | 91.21 | 80.82 |
+| 20 | **RL** | **78.89** | **73.89** | **54.23** | **91.27** | **80.86** |
+| 100 | verify all | 75.18 | 75.15 | 54.14 | 91.77 | 81.44 |
+
+Bootstrap at selected lr, B20: vs classifier ROxf M +0.00 [-0.58, +0.43], **ROxf H +0.66 [+0.15, +1.26]**, gld_val +0.07 [+0.00, +0.14]; vs value **ROxf M +0.53 [+0.20, +0.95]**, **gld_val +0.14 [+0.07, +0.22]**. B10: RL ties on ROxf M, ROxf H -1.8 vs both (n.s.). At the same lr the B20 margins vs the classifier are +0.22 / +0.59 (ROxf M, both CIs > 0).
+- **At B = 20, RL is never significantly worse than a learned baseline on any descriptor or gallery and is significantly better on at least one ROxford protocol in every setting** (ResNet old/new, DINOv2 off the shelf/WiSE-FT, new ResNet + R1M). Margins are +0.5 to +1.0 on ROxford and +0.1 on gld_val.
+- **At B = 10 the result does not hold under R1M:** RL loses by ~4-5 on ROxford+1M because its deep-verification strategy does not transfer to distractor-filled shortlists. Next: train the policies on GLDv2 shortlists that also contain a large distractor set (not R1M, which is part of the test protocol), so the training distribution matches the 1M setting.
+- Note: the diagnosis was run on the login node and used ~40 CPU-minutes (2.7 min wall, unbounded threads); future analyses go to Slurm or set OMP_NUM_THREADS.
+
 ### L2. First R1M result and Track V on the new ResNet descriptor (2026-10-18)
 **R1M (job 4606886, 69 min; R1M embedded in 67 min at 248 img/s):** new ResNet baseline seed 42, ROxford M/H **52.14 / 25.11 -> 36.38 / 10.49 with R1M**, RParis M/H **77.37 / 57.82 -> 44.12 / 22.41 with R1M**. 63 of the 1,001,001 official R1M JPEGs are truncated and were decoded with padding (list next to the embedding cache on WORK). DINOv2 R1M jobs (4606887-88) run at ~31 img/s (about 9 h for R1M).
 
