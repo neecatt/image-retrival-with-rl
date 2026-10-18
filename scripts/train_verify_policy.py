@@ -73,6 +73,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--pre', required=True, help='v_precompute output dir')
     ap.add_argument('--bench_root', required=True, help='dir with roxford5k/roxford5k.pkl etc. (gnd)')
+    ap.add_argument('--bench_pre', default=None,
+                    help='load benchmark shortlists from here instead of --pre (e.g. +R1M, v_precompute_r1m.py)')
     ap.add_argument('--out', required=True)
     ap.add_argument('--budgets', type=int, nargs='+', default=[5, 10, 20])
     ap.add_argument('--threshold', type=int, default=35)
@@ -109,7 +111,7 @@ def main():
 
     # ---- benchmarks
     for name in ('roxford5k', 'rparis6k'):
-        zb = np.load(pre / f'{name}.npz')
+        zb = np.load(Path(a.bench_pre or pre) / f'{name}.npz')
         gnd = pickle.load(open(Path(a.bench_root) / name / f'{name}.pkl', 'rb'))['gnd']
         nq, ndb = zb['sim_full'].shape
         for prot in ('medium', 'hard'):
@@ -176,6 +178,7 @@ def main():
                         if v > best:
                             best, best_state = v, {k: x.clone() for k, x in pol.state_dict().items()}
                 pol.load_state_dict(best_state)
+                torch.save(best_state, out / f'policy_B{B}_{method}_seed{seed}.pt')   # for later re-evaluation
                 per_seed.append({k: evaluate(e, pol, key=(B, method, k)) for k, e in envs.items()})
             res[method] = {k: float(np.mean([s[k] for s in per_seed])) for k in envs}
             res[method + '_seeds'] = per_seed
