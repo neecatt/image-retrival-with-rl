@@ -67,7 +67,8 @@ def final_order(match: torch.Tensor, inliers: torch.Tensor, verified: torch.Tens
 # Environment (batched over queries x trajectories)
 # ---------------------------------------------------------------------------------------------
 class VerifyEnv:
-    def __init__(self, data: Dict[str, torch.Tensor], budget: int, threshold: int = 35, hard_mix: float = 0.0):
+    def __init__(self, data: Dict[str, torch.Tensor], budget: int, threshold: int = 35, hard_mix: float = 0.0,
+                 feat: str = 'v1'):
         # data: sim (Q,K), cand_sim (Q,K,K), inliers (Q,K), rel (Q,K) int, npos (Q,), ap_tail (Q,)
         self.d, self.B, self.T = data, budget, threshold
         # hard_mix > 0 (training only): reward = (1 - w) AP + w AP_hardproxy, where the hard proxy
@@ -75,6 +76,11 @@ class VerifyEnv:
         self.w = hard_mix if 'rel_hard' in data else 0.0
         self.Q, self.K = data['sim'].shape
         self.match = data['inliers'] >= threshold
+        # v2 adds two features that do not depend on the similarity scale of the gallery (a large
+        # distractor set shifts all shortlist similarities up): z-score of sim within the shortlist and
+        # its position between the rank-1 and rank-K similarity
+        self.feat = feat
+        self.n_feat = 12 if feat == 'v2' else 10
 
     def features(self, idx, verified, outcome):
         """idx (N,) query ids; verified/outcome (N,K) bool. Returns (N,K,F)."""
@@ -93,6 +99,10 @@ class VerifyEnv:
         rank = torch.arange(K, device=sim.device).float()[None].expand_as(sim) / K
         f = torch.stack([sim, rank, sim - sim[:, :1], max_pos, mean_pos, max_neg, wpos,
                          used.expand_as(sim), frac_m.expand_as(sim), (posm.sum(-1, keepdim=True) > 0).float().expand_as(sim)], -1)
+        if self.feat == 'v2':
+            z = (sim - sim.mean(-1, keepdim=True)) / sim.std(-1, keepdim=True).clamp(min=1e-4)
+            span = (sim - sim[:, -1:]) / (sim[:, :1] - sim[:, -1:]).clamp(min=1e-4)
+            f = torch.cat([f, z[..., None], span[..., None]], -1)
         return f
 
     def reward(self, idx, verified):

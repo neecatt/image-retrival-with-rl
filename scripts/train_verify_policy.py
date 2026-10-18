@@ -14,6 +14,18 @@ Methods at verification budget B (out of a top-K shortlist):
   all_K       verify the whole shortlist (upper bound for this re-ranking rule)
 Policies are trained on GLDv2-clean val queries of 2/3 of the landmarks, selected on the other 1/3,
 and evaluated once on ROxford/RParis (Medium/Hard, official AP, junk ignored).
+
+Options (Track V-D; defaults reproduce the earlier runs):
+  --gld_extra tag=dir   more GLDv2 training shortlists of the same queries (e.g. over val pool + GLDv2
+                        distractors, v_precompute_dist.py); training samples all pools, selection uses the
+                        mean gld_val over pools
+  --bench_extra tag=dir more benchmark shortlists (e.g. + R1M), reported as <bench>_<prot>_<tag>
+  --feat v2             two similarity-scale-invariant features (all learned methods)
+  --rl_init classifier  RL starts from the selected classifier policy of the same seed (pretrain, then
+                        tune with the task reward, as in the original framework)
+  --dagger              classifier/value also train on states visited by their own current policy
+  --sup_iters N         update budget of the supervised baselines (default --iters), to match RL's
+                        pretraining + tuning updates
 """
 import argparse, json, pickle, sys, time
 from pathlib import Path
@@ -44,6 +56,26 @@ def build(sim_full, top_idx, inliers, cand_sim, rel_full, K, dev):
 
 def subset(d, idx):
     return {k: v[idx] for k, v in d.items()}
+
+
+def load_gld(path, dev):
+    """GLDv2 val-pool shortlists: full format (v_precompute.py) or compact (v_precompute_dist.py)."""
+    z = np.load(path)
+    qs, labels, top = z['queries'], z['labels'], z['top_idx']
+    if 'rel_top' in z.files:
+        d = {'sim': torch.tensor(z['sim_top'], device=dev), 'cand_sim': torch.tensor(z['cand_sim'], device=dev),
+             'inliers': torch.tensor(z['inliers'], device=dev),
+             'rel': torch.tensor(z['rel_top'].astype(np.int64), device=dev),
+             'npos': torch.tensor(z['npos'], device=dev),
+             'ap_tail': torch.tensor(z['ap_tail'], dtype=torch.float32, device=dev)}
+        return d, qs, labels, top.shape[1], None
+    rel_full = (labels[None, :] == labels[qs][:, None]).astype(np.int8)
+    rel_full[np.arange(len(qs)), qs] = -1
+    return build(z['sim_full'], top, z['inliers'], z['cand_sim'], rel_full, top.shape[1], dev), qs, labels, top.shape[1], (z, rel_full)
+
+
+def cat_pools(ds):
+    return {k: torch.cat([d[k] for d in ds]) for k in ds[0]}
 
 
 PER_QUERY = {}
@@ -86,18 +118,25 @@ def main():
     ap.add_argument('--arch', choices=['mlp', 'attn'], default='mlp', help='policy/value network (same for all learned methods)')
     ap.add_argument('--hard_mix', type=float, default=0.0, help='weight of the hard-proxy AP in the training reward')
     ap.add_argument('--easy_inliers', type=int, default=150, help='shortlist positives with >= this many inliers count as easy')
+    ap.add_argument('--gld_extra', nargs='*', default=[], help='tag=dir: more GLDv2 shortlists of the same queries')
+    ap.add_argument('--bench_extra', nargs='*', default=[], help='tag=dir: more benchmark shortlists')
+    ap.add_argument('--feat', choices=['v1', 'v2'], default='v1')
+    ap.add_argument('--rl_init', choices=['none', 'classifier', 'value'], default='none')
+    ap.add_argument('--dagger', action='store_true')
+    ap.add_argument('--sup_iters', type=int, default=None)
+    ap.add_argument('--methods', nargs='+', default=['classifier', 'value', 'rl'])
     a = ap.parse_args()
+    a.sup_iters = a.sup_iters or a.iters
+    if a.rl_init != 'none' and a.rl_init not in a.methods:
+        raise SystemExit('--rl_init needs that method in --methods (trained first)')
     dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     pre, out = Path(a.pre), Path(a.out); out.mkdir(parents=True, exist_ok=True)
 
     # ---- GLDv2 val pool: relevance = same landmark; the query itself is junk
-    z = np.load(pre / 'gldv2c_val.npz')
-    qs, labels, top = z['queries'], z['labels'], z['top_idx']
-    K = top.shape[1]
-    rel_full = (labels[None, :] == labels[qs][:, None]).astype(np.int8)
-    rel_full[np.arange(len(qs)), qs] = -1
-    gld = build(z['sim_full'], top, z['inliers'], z['cand_sim'], rel_full, K, dev)
+    gld, qs, labels, K, full = load_gld(pre / 'gldv2c_val.npz', dev)
     if a.hard_mix > 0:      # hard proxy: easy shortlist positives become junk (training reward only)
+        z, rel_full = full
+        top = z['top_idx']
         rel_h = rel_full.copy()
         easy = (z['inliers'] >= a.easy_inliers) & (rel_full[np.arange(len(qs))[:, None], top] == 1)
         for q in range(len(qs)):
@@ -107,11 +146,22 @@ def main():
     lm = labels[qs]
     is_tr = (lm * 2654435761 % 3) != 0                            # landmark-level split, 2/3 train
     tr_idx = torch.tensor(np.where(is_tr)[0], device=dev); va_idx = torch.tensor(np.where(~is_tr)[0], device=dev)
-    pools = {'gld_train': subset(gld, tr_idx), 'gld_val': subset(gld, va_idx)}
+    pools = {'gld_val': subset(gld, va_idx)}
+    train_parts, val_keys = [subset(gld, tr_idx)], ['gld_val']
+    for spec in a.gld_extra:
+        tag, d = spec.split('=', 1)
+        g2, qs2, _, K2, _ = load_gld(Path(d) / 'gldv2c_val.npz', dev)
+        assert np.array_equal(qs2, qs) and K2 == K, f"{spec}: different queries or K"
+        if a.hard_mix > 0:
+            raise SystemExit('--hard_mix is not supported with --gld_extra')
+        pools[f'gld_val_{tag}'] = subset(g2, va_idx); val_keys.append(f'gld_val_{tag}')
+        train_parts.append(subset(g2, tr_idx))
+    train_pool = cat_pools(train_parts) if len(train_parts) > 1 else train_parts[0]
 
     # ---- benchmarks
-    for name in ('roxford5k', 'rparis6k'):
-        zb = np.load(Path(a.bench_pre or pre) / f'{name}.npz')
+    bench_dirs = [('', Path(a.bench_pre or pre))] + [('_' + x.split('=', 1)[0], Path(x.split('=', 1)[1])) for x in a.bench_extra]
+    for (suffix, bdir), name in [(b, n) for b in bench_dirs for n in ('roxford5k', 'rparis6k')]:
+        zb = np.load(bdir / f'{name}.npz')
         gnd = pickle.load(open(Path(a.bench_root) / name / f'{name}.pkl', 'rb'))['gnd']
         nq, ndb = zb['sim_full'].shape
         for prot in ('medium', 'hard'):
@@ -124,27 +174,35 @@ def main():
                 if pos:
                     keep.append(q)
             d = build(zb['sim_full'], zb['top_idx'], zb['inliers'], zb['cand_sim'], rf, K, dev)
-            pools[f'{name}_{prot}'] = subset(d, torch.tensor(keep, device=dev))
+            pools[f'{name}_{prot}{suffix}'] = subset(d, torch.tensor(keep, device=dev))
 
     def sim_scorer(f):
         return f[..., 0] * 100
-    results = {'K': K, 'threshold': a.threshold, 'pools': {k: int(v['sim'].shape[0]) for k, v in pools.items()}}
+    results = {'K': K, 'threshold': a.threshold, 'pools': {k: int(v['sim'].shape[0]) for k, v in pools.items()},
+               'selection': val_keys, 'args': vars(a)}
+    E = lambda d, b, **kw: VerifyEnv(d, b, a.threshold, feat=a.feat, **kw)
+    zero = lambda f: torch.zeros_like(f[..., 0])
     for B in a.budgets:
-        envs = {k: VerifyEnv(v, B, a.threshold) for k, v in pools.items()}
+        envs = {k: E(v, B) for k, v in pools.items()}
         res = {}
-        res['none'] = {k: evaluate(VerifyEnv(v, 0, a.threshold), sim_scorer, key=(B, 'none', k)) for k, v in pools.items()}
+        res['none'] = {k: evaluate(E(v, 0), sim_scorer, key=(B, 'none', k)) for k, v in pools.items()}
         res['top'] = {k: evaluate(e, sim_scorer, key=(B, 'top', k)) for k, e in envs.items()}
-        res['random'] = {k: evaluate(e, lambda f: torch.zeros_like(f[..., 0]), 'sample', reps=5) for k, e in envs.items()}
-        res['all_K'] = {k: evaluate(VerifyEnv(v, K, a.threshold), sim_scorer) for k, v in pools.items()}
-        for method in ('classifier', 'value', 'rl'):
-            per_seed = []
+        res['random'] = {k: evaluate(e, zero, 'sample', reps=5) for k, e in envs.items()}
+        res['all_K'] = {k: evaluate(E(v, K), sim_scorer) for k, v in pools.items()}
+        trained = {}                                     # (method, seed) -> selected state
+        for method in a.methods:
+            per_seed, curves = [], []
             for seed in a.seeds:
                 torch.manual_seed(seed)
-                pol = (AttnPolicy() if a.arch == 'attn' else Policy()).to(dev)
+                tr = E(train_pool, B, hard_mix=a.hard_mix)
+                pol = (AttnPolicy(n_feat=tr.n_feat) if a.arch == 'attn' else Policy(n_feat=tr.n_feat)).to(dev)
+                if method == 'rl' and a.rl_init != 'none':
+                    pol.load_state_dict(trained[(a.rl_init, seed)])
                 opt = torch.optim.Adam(pol.parameters(), lr=a.lr)
-                tr = VerifyEnv(pools['gld_train'], B, a.threshold, hard_mix=a.hard_mix)
-                best, best_state = -1, None
-                for it in range(a.iters):
+                n_it = a.iters if method == 'rl' else a.sup_iters
+                score = lambda: float(np.mean([evaluate(envs[k], pol) for k in val_keys]))
+                best, best_state, curve = score(), {k: x.clone() for k, x in pol.state_dict().items()}, []
+                for it in range(n_it):
                     idx = torch.randint(0, tr.Q, (a.batch,), device=dev)
                     if method == 'rl':
                         rep = idx.repeat_interleave(a.samples)
@@ -152,39 +210,40 @@ def main():
                         r = r.view(a.batch, a.samples)
                         adv = r - (r.sum(1, keepdim=True) - r) / (a.samples - 1)
                         loss = -(adv.detach().flatten() * logp).mean()
-                    elif method == 'value':
+                    else:
+                        # training states: top-similarity rollouts, random rollouts and (with --dagger) rollouts
+                        # of the current policy itself, truncated after a random number of steps
                         with torch.no_grad():
-                            sc = (lambda f: torch.zeros_like(f[..., 0])) if it % 2 else sim_scorer
-                            sub = VerifyEnv(tr.d, int(torch.randint(0, B, (1,))), a.threshold)
-                            _, _, ver = rollout(sub, idx, sc, 'sample' if it % 2 else 'greedy')
-                            target = one_step_gains(tr, idx, ver) * 100
+                            kind = it % 3 if a.dagger else it % 2
+                            sc, mode = [(sim_scorer, 'greedy'), (zero, 'sample'), (pol, 'sample')][kind]
+                            sub = E(tr.d, int(torch.randint(0, B, (1,))))
+                            _, _, ver = rollout(sub, idx, sc, mode)
+                            if method == 'value':
+                                target = one_step_gains(tr, idx, ver) * 100
                         fx = tr.features(idx, ver, tr.match[idx])
                         pred = pol(fx, tr.d['cand_sim'][idx].float()) if a.arch == 'attn' else pol(fx)
-                        loss = F.mse_loss(pred[~ver], target[~ver])
-                    else:
-                        # states from a mix of random and top-similarity rollouts; label = verified match
-                        with torch.no_grad():
-                            sc = (lambda f: torch.zeros_like(f[..., 0])) if it % 2 else sim_scorer
-                            k_steps = int(torch.randint(0, B, (1,)))
-                            sub = VerifyEnv(tr.d, k_steps, a.threshold)
-                            _, _, ver = rollout(sub, idx, sc, 'sample' if it % 2 else 'greedy')
-                        f = tr.features(idx, ver, tr.match[idx])
-                        logit = pol(f, tr.d['cand_sim'][idx].float()) if a.arch == 'attn' else pol(f)
-                        m = ~ver
-                        loss = F.binary_cross_entropy_with_logits(logit[m], tr.match[idx][m].float())
+                        if method == 'value':
+                            loss = F.mse_loss(pred[~ver], target[~ver])
+                        else:
+                            m = ~ver
+                            loss = F.binary_cross_entropy_with_logits(pred[m], tr.match[idx][m].float())
                     opt.zero_grad(); loss.backward(); opt.step()
                     if (it + 1) % 100 == 0:
-                        v = evaluate(envs['gld_val'], pol)
+                        v = score(); curve.append(round(100 * v, 3))
                         if v > best:
                             best, best_state = v, {k: x.clone() for k, x in pol.state_dict().items()}
                 pol.load_state_dict(best_state)
+                trained[(method, seed)] = best_state
                 torch.save(best_state, out / f'policy_B{B}_{method}_seed{seed}.pt')   # for later re-evaluation
                 per_seed.append({k: evaluate(e, pol, key=(B, method, k)) for k, e in envs.items()})
+                curves.append(curve)
             res[method] = {k: float(np.mean([s[k] for s in per_seed])) for k in envs}
+            res[method]['selection'] = float(np.mean([res[method][k] for k in val_keys]))
             res[method + '_seeds'] = per_seed
+            res[method + '_curves'] = curves
         results[f'B{B}'] = res
         print(f"B={B}: " + json.dumps({m: {k: round(100 * v, 2) for k, v in r.items()} for m, r in res.items()
-                                       if not m.endswith('_seeds')}), flush=True)
+                                       if not m.endswith(('_seeds', '_curves'))}), flush=True)
         (out / 'results.json').write_text(json.dumps(results, indent=1))
         np.savez(out / 'per_query.npz', **{f'B{b}|{m}|{p}': np.mean(v, 0) for (b, m, p), v in PER_QUERY.items()})
 
