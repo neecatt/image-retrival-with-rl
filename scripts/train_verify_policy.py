@@ -21,13 +21,15 @@ Options (Track V-D; defaults reproduce the earlier runs):
                         mean gld_val over pools
   --bench_extra tag=dir more benchmark shortlists (e.g. + R1M), reported as <bench>_<prot>_<tag>
   --feat v2             two similarity-scale-invariant features (all learned methods)
-  --rl_init classifier  RL starts from the selected classifier policy of the same seed (pretrain, then
-                        tune with the task reward, as in the original framework)
+  --rl_init classifier  RL starts from the selected classifier (or value) policy of the same seed (pretrain,
+                        then tune with the task reward, as in the original framework); --rl_lr sets its lr.
+                        The init itself is scored first, so the selected RL policy is never below it on val
   --dagger              classifier/value also train on states visited by their own current policy
+  --cosine              per-step cosine lr decay with 2% warm-up (all methods)
   --sup_iters N         update budget of the supervised baselines (default --iters), to match RL's
                         pretraining + tuning updates
 """
-import argparse, json, pickle, sys, time
+import argparse, json, math, pickle, sys, time
 from pathlib import Path
 
 import numpy as np
@@ -124,6 +126,8 @@ def main():
     ap.add_argument('--rl_init', choices=['none', 'classifier', 'value'], default='none')
     ap.add_argument('--dagger', action='store_true')
     ap.add_argument('--sup_iters', type=int, default=None)
+    ap.add_argument('--cosine', action='store_true', help='per-step cosine lr decay (2%% warm-up) for every method')
+    ap.add_argument('--rl_lr', type=float, default=None, help='RL learning rate (default --lr); e.g. lower for fine-tuning')
     ap.add_argument('--methods', nargs='+', default=['classifier', 'value', 'rl'])
     a = ap.parse_args()
     a.sup_iters = a.sup_iters or a.iters
@@ -198,8 +202,13 @@ def main():
                 pol = (AttnPolicy(n_feat=tr.n_feat) if a.arch == 'attn' else Policy(n_feat=tr.n_feat)).to(dev)
                 if method == 'rl' and a.rl_init != 'none':
                     pol.load_state_dict(trained[(a.rl_init, seed)])
-                opt = torch.optim.Adam(pol.parameters(), lr=a.lr)
+                opt = torch.optim.Adam(pol.parameters(), lr=(a.rl_lr or a.lr) if method == 'rl' else a.lr)
                 n_it = a.iters if method == 'rl' else a.sup_iters
+                sched = None
+                if a.cosine:
+                    w = max(1, n_it // 50)
+                    sched = torch.optim.lr_scheduler.LambdaLR(
+                        opt, lambda t: min(1.0, (t + 1) / w) * 0.5 * (1 + math.cos(math.pi * min(t, n_it) / n_it)))
                 score = lambda: float(np.mean([evaluate(envs[k], pol) for k in val_keys]))
                 best, best_state, curve = score(), {k: x.clone() for k, x in pol.state_dict().items()}, []
                 for it in range(n_it):
@@ -228,7 +237,9 @@ def main():
                             m = ~ver
                             loss = F.binary_cross_entropy_with_logits(pred[m], tr.match[idx][m].float())
                     opt.zero_grad(); loss.backward(); opt.step()
-                    if (it + 1) % 100 == 0:
+                    if sched is not None:
+                        sched.step()
+                    if (it + 1) % (100 if n_it <= 12000 else 400) == 0:
                         v = score(); curve.append(round(100 * v, 3))
                         if v > best:
                             best, best_state = v, {k: x.clone() for k, x in pol.state_dict().items()}
