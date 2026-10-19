@@ -2,6 +2,36 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### L5. Track V-D results: distractor-aware training, matched 6-config grid (2026-10-19)
+Data (L4 jobs): distractors packed in 15 min (909,836 images, 0 bad); shortlists over val pool + distractors: new ResNet 97 min, DINOv2 167 min; the fresh val-pool similarities reproduce the plain run (max diff 2.4e-4) and the compact AP tables match `query_tables` on 20/20 queries; 82% (ResNet) / 78% (DINOv2) of the distractor-shortlist items are distractors (ROxf + R1M: 48%). Policies 4615051-62 (2.5-5 h each). Each method's config (lr x variant A/B, 6 per method) chosen per budget on mean gld_val (plain + distractor shortlists); `scripts/analysis/trackv_select.py`, outputs `results/trackv/vd_*_selection.json`.
+
+**New ResNet, B = 20** (RL - baseline, paired bootstrap; * = CI excludes 0):
+
+| method | val (plain / dist) | ROxf M / H | RPar M / H | ROxf+1M M / H | RPar+1M M / H |
+|---|---|---|---|---|---|
+| none | 62.51 / 38.18 | 52.15 / 25.11 | 77.36 / 57.82 | 36.38 / 10.49 | 44.14 / 22.38 |
+| top-20 | 64.39 / 41.64 | 57.45 / 33.28 | 77.54 / 57.96 | 43.20 / 19.04 | 44.54 / 22.65 |
+| classifier | 65.91 / 43.87 | 62.25 / 36.54 | 77.74 / 58.13 | 48.53 / 22.41 | 45.45 / 22.80 |
+| value | 65.89 / 43.89 | 62.12 / 36.72 | 77.72 / 58.02 | 47.62 / 21.85 | 45.63 / 22.85 |
+| **RL** | **65.97 / 44.03** | **62.80 / 36.98** | 77.74 / 58.03 | **49.31 / 23.18** | **45.72** / 22.78 |
+| RL - classifier | +0.05 / **+0.16*** | **+0.55* / +0.44*** | -0.01 / -0.11 | **+0.79*** / +0.78 | **+0.27*** / -0.02 |
+| RL - value | **+0.07* / +0.14*** | **+0.69*** / +0.25 | +0.01 / +0.01 | **+1.70* / +1.33*** | +0.09 / -0.07 |
+
+Other cells (RL - classifier / RL - value, significant ones only):
+- New ResNet B5: vs classifier val **+0.78 / +0.64**, ROxf H **+4.50**, ROxf+1M H **+3.26**, RPar+1M M **+0.34**; vs value all n.s. (ROxf+1M M -0.94, H -2.01, n.s.).
+- New ResNet B10: vs classifier val **+0.31 / +0.41**, RPar+1M M **+0.39**; vs value dist-val **+0.15**; benchmarks n.s. (ROxf+1M M vs classifier -1.71 [-4.14, +0.23]; it was **-4.76*** before distractor-aware training, L3).
+- DINOv2 WiSE-FT B5: vs classifier val **+0.27 / +0.50**, ROxf H **+1.36**, ROxf+1M H **+2.35**; vs value val **+0.08**.
+- DINOv2 B10: vs classifier val **+0.15 / +0.22**; vs value dist-val **+0.12**, RPar M **+0.02**; ROxf H vs value -2.34 [-5.59, +0.00] (n.s.).
+- DINOv2 B20 (near the verify-all ceiling, e.g. ROxf+1M H: RL 42.41, verify all 42.22): vs classifier val **+0.08 / +0.07**; vs value dist-val **+0.06**, RPar M **+0.04**; ROxford n.s.
+
+Findings:
+- **RL is never significantly worse than either learned baseline in any of the 120 comparisons** (2 descriptors x 3 budgets x 2 baselines x 10 pools: 2 validation + 8 benchmark), and significantly better in 33 of them; it is best on validation in 34 of the 36 (config, budget) cells. Benchmark margins are mostly +0.3 to +1.7, larger on ROxford Hard at B5 (up to +4.5 vs the classifier).
+- **Distractor-aware training removes the L3 failure:** ResNet B10 ROxf+1M M, RL - classifier -4.76* -> -1.71 (n.s.).
+- **Strongest result: new ResNet B20 with R1M:** RL ROxf+1M M/H 49.31 / 23.18 vs top-20 re-ranking 43.20 / 19.04 and vs the best supervised policy +0.79* / +1.33* (classifier / value on M / H).
+- The RL warm start (variant B) did not help: RL from scratch reaches the same validation score and is selected in 5 of 6 cells.
+- Baselines peak at 80-97% of their 6,000 updates (RL earlier), so a 12,000-update baseline check is running (jobs 4618105-12, classifier/value, the 4 selected configs, both descriptors).
+- **Replication over 4 more descriptor seeds** (new ResNet seeds 1-4): R1M embeddings, plain / distractor / R1M shortlists, then 4 configs per method (A lr 1e-3 / 3e-4 / 1e-4, B lr 1e-3; baselines 12,000 updates, RL 6,000), selection per seed on validation (jobs 4618113-44).
+
 ### L4. Storage incident and Track V-D setup (2026-10-18, results pending)
 **Vault quota:** vault was at 1,512 GB charged (soft 1,049 GB, grace ending within hours; vault charges ~2x apparent size). The 500 raw GLDv2 train tars (499 GB) moved to WORK `/home/atuin/b268dc/b268dc21/datasets/gldv2/train`, each copied, checked against its official md5 and only then removed from vault (no mismatches). Vault now 472.5 GB; scripts read the tars from WORK.
 
