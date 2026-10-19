@@ -2,6 +2,35 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### L6. Track V-D over 5 descriptor seeds, stronger baselines (2026-10-19)
+Jobs 4618105-44, all completed. Seed 42: baselines rerun with 12,000 updates (RL keeps 6,000); seeds 1-4 (new ResNet `gr_full_c02_e10_seed{1..4}`): R1M embeddings, plain / distractor / R1M shortlists, 4 configs per method (A lr 1e-3 / 3e-4 / 1e-4, B lr 1e-3; baselines 12,000 updates). Per seed and budget each method's config is chosen on validation; RL - baseline per-query differences averaged over the 5 seeds and bootstrapped over queries; `seeds+` = seeds with a positive mean difference (`scripts/analysis/trackv_seeds.py`, `results/trackv/vd_newresnet_5seeds.json`).
+
+Mean over 5 seeds, B = 20:
+
+| method | val plain / dist | ROxf M / H | ROxf+1M M / H | RPar+1M M / H |
+|---|---|---|---|---|
+| top-20 | 64.58 / 41.57 | 57.00 / 33.74 | 43.62 / 20.71 | 44.32 / 22.24 |
+| classifier | 66.19 / 43.98 | 61.09 / 36.46 | 47.59 / 22.83 | 45.14 / 22.31 |
+| value | 66.19 / 43.98 | 61.02 / 36.77 | 47.75 / 23.22 | 45.30 / 22.37 |
+| RL | 66.21 / 44.03 | 61.09 / 36.52 | 48.06 / 23.36 | 45.36 / 22.41 |
+| verify all 100 | 64.09 / 43.70 | 64.14 / 40.52 | 50.18 / 26.24 | 46.66 / 23.90 |
+
+RL - classifier (pooled, CI95, seeds+):
+- **B20: ROxf+1M M +0.47 [+0.10, +0.88] 5/5, H +0.53 [+0.08, +1.01] 5/5, RPar+1M M +0.22 [+0.09, +0.35] 5/5**; dist-val +0.05 5/5; ROxf without R1M ~0.
+- **B10: val +0.22 / dist-val +0.28 (5/5), RPar+1M M +0.36 (5/5)**; ROxford n.s. (M -0.59, H -1.29).
+- **B5: val +0.62 / +0.63 (5/5), ROxf H +1.83 [+0.38, +3.35] (5/5), RPar+1M M +0.31 (5/5).**
+
+RL - value (myopic one-step AP-gain policy):
+- B20: dist-val +0.05 [+0.01, +0.09] 5/5; all benchmarks n.s. (ROxf+1M M +0.31 [-0.01, +0.67] 4/5).
+- B10: dist-val +0.05 (4/5); **ROxf H -0.90 [-1.82, -0.13]** (seed-level p = 0.36); others n.s.
+- B5: val -0.02, dist-val -0.05 (0/5 seeds positive); RPar+1M M +0.06 and H +0.03 (5/5); ROxford n.s.
+
+- **RL reliably beats the supervised match classifier** (the standard learned re-ranking scheduler), replicated in 5/5 descriptor seeds on validation and on the R1M benchmarks at B20.
+- **RL does not beat the myopic value policy:** with 12,000 baseline updates, the value policy ties RL on validation and on the benchmarks. The L5 margins over the value policy (seed 42, +1.70 on ROxf+1M M) shrink to +0.88 on that seed with stronger baselines and to +0.31 (n.s.) pooled. Part of the earlier RL - value margin came from an undertrained value baseline.
+- The baselines were still improving at 12,000 updates (best checkpoint at 80-95% of training, +0.05-0.1 in the second half), so the next round uses a cosine lr decay for every method and 48,000 baseline updates.
+
+**Pilot V-E (seed 42, jobs 4621459-68):** cosine lr decay for every method; classifier and value 48,000 updates (lr 1e-3 / 3e-4 x A / B); RL fine-tuned from the trained value policy of the same seed (3,000 updates, rl_lr 1e-4 / 3e-5, A / B; the init is scored first, so the selected RL policy cannot fall below it on validation); RL from scratch, 6,000 updates (lr 3e-4 / 1e-4). If reward tuning improves on the converged value policy, scale to the other seeds and DINOv2.
+
 ### L5. Track V-D results: distractor-aware training, matched 6-config grid (2026-10-19)
 Data (L4 jobs): distractors packed in 15 min (909,836 images, 0 bad); shortlists over val pool + distractors: new ResNet 97 min, DINOv2 167 min; the fresh val-pool similarities reproduce the plain run (max diff 2.4e-4) and the compact AP tables match `query_tables` on 20/20 queries; 82% (ResNet) / 78% (DINOv2) of the distractor-shortlist items are distractors (ROxf + R1M: 48%). Policies 4615051-62 (2.5-5 h each). Each method's config (lr x variant A/B, 6 per method) chosen per budget on mean gld_val (plain + distractor shortlists); `scripts/analysis/trackv_select.py`, outputs `results/trackv/vd_*_selection.json`.
 
