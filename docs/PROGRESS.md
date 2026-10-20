@@ -2,6 +2,19 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### L7. Pilot V-E: converged baselines and RL fine-tuned from the value policy (2026-10-20)
+Jobs 4621459-68 (2.3-4.1 h), new ResNet seed 42, cosine lr for every method. Validation selection score (mean gld_val plain + distractor), 3 policy seeds:
+
+| B | classifier (48k) | value (48k) | RL from scratch (6k) | RL from value (+3k) |
+|---|---|---|---|---|
+| 5 | 52.52 | 53.17 | 53.15 | 53.19 |
+| 10 | 53.95 | 54.21 | 54.16 | 54.21 |
+| 20 | 55.00 | 55.00 | 54.97 | 55.04 |
+
+- **Reward fine-tuning of the converged value policy adds at most +0.06 on validation** (per policy seed +0.00 to +0.06; at B10 with rl_lr 3e-5 the selected RL policy is its unchanged init). Benchmarks after selection (`results/trackv/ve_newresnet_selection.json`): RL - value all n.s. except RPar M +0.06 and RPar+1M M +0.08 at B20; RL - classifier keeps the B5 gains (ROxf M +1.87*, H +1.96*, ROxf+1M H +5.65*) but at B20 the converged classifier ties RL on ROxford.
+- **RL from scratch does not beat converged supervised policies** (B20: 54.97 vs 55.00 for both baselines).
+- Interpretation: in this formulation the greedy one-step value policy is close to optimal, as expected if the AP gain of verification is close to adaptive submodular (the adaptive greedy policy is then near-optimal; Golovin & Krause 2011), leaving multi-step planning little to add. A clear RL advantage needs a task where myopic choices are provably poor (for example verification that unlocks new candidates, such as verified query expansion, or non-uniform verification costs).
+
 ### L6. Track V-D over 5 descriptor seeds, stronger baselines (2026-10-19)
 Jobs 4618105-44, all completed. Seed 42: baselines rerun with 12,000 updates (RL keeps 6,000); seeds 1-4 (new ResNet `gr_full_c02_e10_seed{1..4}`): R1M embeddings, plain / distractor / R1M shortlists, 4 configs per method (A lr 1e-3 / 3e-4 / 1e-4, B lr 1e-3; baselines 12,000 updates). Per seed and budget each method's config is chosen on validation; RL - baseline per-query differences averaged over the 5 seeds and bootstrapped over queries; `seeds+` = seeds with a positive mean difference (`scripts/analysis/trackv_seeds.py`, `results/trackv/vd_newresnet_5seeds.json`).
 
