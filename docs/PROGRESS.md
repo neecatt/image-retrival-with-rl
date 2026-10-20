@@ -2,6 +2,24 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### Q1. Headroom for verification with query expansion (2026-10-20, branch `feat/verified-query-expansion`)
+Job 4624689 (9 min), new ResNet seed 42, `scripts/analysis/qe_headroom.py`, `results/qe/headroom_newresnet_seed42/qe_headroom.json`. Every verified shortlist match (>= 35 inliers) unlocks its k nearest gallery neighbours. Oracle = verify-all, then every reachable positive, then the rest (assumes expansion candidates verify perfectly, so it is an upper bound). GLDv2: first 3,000 of the 10k val queries. Sanity: verify-all reproduces Track V all_K (ROxf M 64.96, ROxf+1M M 51.20).
+
+| pool | positives below top-100 | reachable (k = 10 / 20) | global | verify-all 100 | oracle QE k = 10 / 20 |
+|---|---|---|---|---|---|
+| GLDv2 val | 4.1 | 0.45 / 0.72 | 65.43 | 67.32 | 69.09 / 70.11 |
+| GLDv2 val + distractors | 8.7 | 0.99 / 1.51 | 41.69 | 48.26 | 52.20 / 54.10 |
+| ROxf M | 51.0 | 9.9 / 14.0 | 52.14 | 64.96 | 69.76 / 71.48 |
+| ROxf H | 30.1 | 1.8 / 2.9 | 25.11 | 40.04 | 45.00 / 46.72 |
+| ROxf+1M M | 55.2 | 10.5 / 14.1 | 36.38 | 51.20 | 56.94 / 58.99 |
+| ROxf+1M H | 32.3 | 1.8 / 2.6 | 10.49 | 26.07 | 31.64 / 33.80 |
+| RPar M | 164.9 | 24.6 / 37.0 | 77.37 | 78.65 | 80.76 / 81.99 |
+| RPar+1M M | 184.7 | 23.5 / 35.3 | 44.12 | 46.92 | 52.23 / 55.26 |
+| RPar+1M H | 132.8 | 10.0 / 16.2 | 22.41 | 24.20 | 28.90 / 32.30 |
+
+- **Expansion opens large headroom beyond verifying the whole shortlist:** +5 to +8 mAP on ROxford(+1M) and RParis+1M at k = 10-20, versus +1 to +3 left by verify-all in Track V. Unlike Track V, a check now has value beyond its immediate AP gain (it unlocks candidates), which a one-step policy cannot see.
+- On GLDv2 (policy training data) the signal is weaker: ~1 reachable positive per query with distractors, expansion precision ~6% (ROxford ~50%), because GLDv2 val landmarks have only ~20 images. Training may need the distractor shortlists, where the headroom is +4 to +6.
+
 ### L7. Pilot V-E: converged baselines and RL fine-tuned from the value policy (2026-10-20)
 Jobs 4621459-68 (2.3-4.1 h), new ResNet seed 42, cosine lr for every method. Validation selection score (mean gld_val plain + distractor), 3 policy seeds:
 
