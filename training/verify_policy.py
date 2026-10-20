@@ -143,7 +143,8 @@ class AttnPolicy(nn.Module):
         self.sim_scale = nn.Parameter(torch.full((layers, heads), 5.0))
         self.out = nn.Linear(d, 1)
 
-    def forward(self, f, C=None):
+    def forward(self, f, C=None, mask=None):
+        """mask (N,K) bool: valid candidates (padding cannot be attended to); None = all valid."""
         N, K, _ = f.shape
         x = self.inp(f)
         for l in range(len(self.qkv)):
@@ -152,6 +153,8 @@ class AttnPolicy(nn.Module):
             att = q @ k.transpose(-1, -2) / q.size(-1) ** 0.5
             if C is not None:
                 att = att + self.sim_scale[l].view(1, -1, 1, 1) * C[:, None]
+            if mask is not None:
+                att = att.masked_fill(~mask[:, None, None, :], float('-inf'))
             x = x + self.proj[l]((att.softmax(-1) @ v).transpose(1, 2).reshape(N, K, -1))
             x = x + self.ff[l](x)
         return self.out(x).squeeze(-1)
