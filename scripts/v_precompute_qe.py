@@ -240,7 +240,9 @@ def main():
             z = np.load(Path(a.r1m_pre) / f'{name}.npz')
             G = torch.cat([Gd, R]); n_db = Gd.shape[0]
             s1 = knn(G, z['top_idx'][z['inliers'] >= a.threshold], a.k)
-            hop1 = {y for v in s1.values() for y in v} - set(z['top_idx'].ravel().tolist())
+            # all neighbours of matches, not minus the shortlists: an item in one query's shortlist can
+            # be another query's expansion candidate, whose neighbours hop 2 may need
+            hop1 = {y for v in s1.values() for y in v}
             s2 = knn(G, hop1, a.k) if a.hops > 1 else {}
             ids = set(z['top_idx'].ravel().tolist()) | hop1 | {y for v in s2.values() for y in v}
             want |= {names[g - n_db] for g in ids if g >= n_db}
@@ -268,6 +270,9 @@ def main():
                 gal = sorted({g for _, g in pairs})
                 paths = crops + [db_paths[g] if g < n_db else str(tmp / 'r1m_qe' / names[g - n_db]) for g in gal]
                 gpos = {g: len(crops) + i for i, g in enumerate(gal)}
+                missing = [x for x in paths if not Path(x).exists()]
+                if missing:
+                    raise RuntimeError(f"{len(missing)} images missing before verification, e.g. {missing[:3]}")
                 vv = Verifier('/', paths, dev, max_kpts=1024, resize=512, batch=32, cpu_workers=16, io_threads=8)
                 res = vv.verify([(q, gpos[g]) for q, g in pairs])
                 vv.close()
@@ -299,7 +304,11 @@ def main():
                          'minutes': round((time.time() - t1) / 60, 1)}
             print(pool, json.dumps(log[pool]), flush=True)
     log['minutes'] = round((time.time() - t0) / 60, 1)
-    (out / 'precompute_qe_log.json').write_text(json.dumps(log, indent=2))
+    lf = out / 'precompute_qe_log.json'                         # merge with earlier runs into the same dir
+    prev = json.loads(lf.read_text()) if lf.exists() else {}
+    prev.setdefault('runs', []).append({k: v for k, v in log.items() if k not in a.pools})
+    prev.update({k: v for k, v in log.items() if k in a.pools})
+    lf.write_text(json.dumps(prev, indent=2))
 
 
 if __name__ == '__main__':
