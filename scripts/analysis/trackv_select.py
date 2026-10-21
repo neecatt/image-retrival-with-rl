@@ -34,11 +34,11 @@ for B in budgets:
     print(f"\n=== B={B}  selected: " + ', '.join(f"{m}={sel[m]}" for m in a.methods))
     rows = {m: runs[sel[m]][0][f'B{B}'][m] for m in a.methods}
     base = runs[sel[a.ref]][0][f'B{B}']
-    for m in ['none', 'top']:
+    heur = [m for m in ('none', 'top', 'shortlist', 'all_K') if m in base]   # whatever the run type has
+    for m in heur:
         rows[m] = base[m]
-    rows['all_K'] = base['all_K']
     print(f"{'method':12s} " + ' '.join(f"{p[:22]:>22s}" for p in pools))
-    for m in ['none', 'top'] + a.methods + ['all_K']:
+    for m in [h for h in heur if h != 'all_K'] + a.methods + [h for h in heur if h == 'all_K']:
         print(f"{m:12s} " + ' '.join(f"{100 * rows[m][p]:22.2f}" for p in pools))
     out[f'B{B}'] = {'selected': sel, 'means': {m: {p: rows[m][p] for p in pools} for m in rows}, 'bootstrap': {}}
     for m in a.methods:
