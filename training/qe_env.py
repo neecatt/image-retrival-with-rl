@@ -104,8 +104,10 @@ def score(env, scorer, f, idx):
     return scorer(f)
 
 
-def rollout(env: QEEnv, idx, scorer, mode='sample', temperature=1.0):
-    """B verification steps; only available candidates can be chosen. Returns AP, sum log-prob, verified."""
+def rollout(env: QEEnv, idx, scorer, mode='sample', temperature=1.0, record=None):
+    """B verification steps; only available candidates can be chosen. Returns AP, sum log-prob, verified.
+    record: optional list that receives (verified, available, action, has) per step, for replaying the
+    trajectory with gradients one step at a time (policy_gradient_backward)."""
     N, C = idx.numel(), env.C
     dev = env.d['sim'].device
     verified = torch.zeros(N, C, dtype=torch.bool, device=dev)
@@ -125,7 +127,28 @@ def rollout(env: QEEnv, idx, scorer, mode='sample', temperature=1.0):
             logp = logp + torch.where(has, dist.log_prob(a), torch.zeros_like(logp))
         else:
             a = logits.argmax(-1)
+        if record is not None:
+            record.append((verified, avail, a, has))
         step = torch.zeros_like(verified)
         step[torch.arange(N, device=dev), a] = True
         verified = verified | (step & has[:, None])
     return env.reward(idx, verified), logp, verified
+
+
+def policy_gradient_backward(env: QEEnv, idx, scorer, adv, record, chunk=1024):
+    """Backpropagate -mean(adv * sum_t log pi(a_t | s_t)) by replaying a recorded trajectory one step
+    (and one chunk of rollouts) at a time: the same gradient as differentiating the whole rollout, with
+    memory independent of the budget. Returns the loss value."""
+    total, N = 0.0, idx.numel()
+    for verified, avail, a, has in record:
+        for s in range(0, N, chunk):
+            sl = slice(s, min(s + chunk, N))
+            f = env.features(idx[sl], verified[sl], avail[sl])
+            logits = score(env, scorer, f, idx[sl]).masked_fill(~avail[sl], float('-inf'))
+            logits = torch.where(has[sl, None], logits, torch.zeros_like(logits))
+            lp = torch.distributions.Categorical(logits=logits).log_prob(a[sl])
+            lp = torch.where(has[sl], lp, torch.zeros_like(lp))
+            loss = -(adv[sl] * lp).sum() / N
+            loss.backward()
+            total += loss.detach().item()
+    return total

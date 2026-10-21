@@ -23,7 +23,7 @@ import torch
 import torch.nn.functional as F
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from training.qe_env import QEEnv, rollout, score                          # noqa: E402
+from training.qe_env import QEEnv, policy_gradient_backward, rollout, score                          # noqa: E402
 from training.verify_policy import AttnPolicy                              # noqa: E402
 
 
@@ -157,10 +157,14 @@ def main():
                     idx = torch.randint(0, tr.Q, (a.batch,), device=dev)
                     if method == 'rl':
                         rep = idx.repeat_interleave(a.samples)
-                        r, logp, _ = rollout(tr, rep, pol, 'sample')
+                        rec = []
+                        with torch.no_grad():
+                            r, _, _ = rollout(tr, rep, pol, 'sample', record=rec)
                         r = r.view(a.batch, a.samples)
-                        adv = r - (r.sum(1, keepdim=True) - r) / (a.samples - 1)
-                        loss = -(adv.detach().flatten() * logp).mean()
+                        adv = (r - (r.sum(1, keepdim=True) - r) / (a.samples - 1)).flatten()
+                        opt.zero_grad()
+                        policy_gradient_backward(tr, rep, pol, adv, rec)
+                        opt.step(); sched.step()
                     else:
                         with torch.no_grad():
                             kind = it % 3 if a.dagger else it % 2
@@ -176,7 +180,7 @@ def main():
                             continue
                         loss = (F.mse_loss(pred[m], target[m]) if method == 'value'
                                 else F.binary_cross_entropy_with_logits(pred[m], tr.match[idx][m].float()))
-                    opt.zero_grad(); loss.backward(); opt.step(); sched.step()
+                        opt.zero_grad(); loss.backward(); opt.step(); sched.step()
                     if (it + 1) % a.eval_every == 0:
                         v = sel(); curve.append(round(100 * v, 3))
                         if v > best:
