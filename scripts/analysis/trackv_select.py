@@ -29,7 +29,8 @@ out = {}
 for B in budgets:
     sel = {}
     for m in a.methods:
-        cands = [(r[f'B{B}'][m].get('selection', r[f'B{B}'][m]['gld_val']), name) for name, (r, _) in runs.items() if m in r[f'B{B}']]
+        cands = [(r[f'B{B}'][m]['selection'] if 'selection' in r[f'B{B}'][m] else r[f'B{B}'][m]['gld_val'], name)
+                 for name, (r, _) in runs.items() if m in r[f'B{B}']]
         sel[m] = max(cands)[1]
     print(f"\n=== B={B}  selected: " + ', '.join(f"{m}={sel[m]}" for m in a.methods))
     rows = {m: runs[sel[m]][0][f'B{B}'][m] for m in a.methods}

@@ -2,7 +2,29 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
-### Q3. QE pilot: first signal, two fixes, clean rerun (2026-10-21, results pending)
+### Q4. Track V-QE results, new ResNet seed 42 (2026-10-21)
+63 jobs (all completed, 65 GPU-h, longest 4.5 h), merged per config (`results/qe/v2/merged`); each method's config chosen per budget on mean GLDv2 validation (plain + distractors); paired bootstrap over queries (`results/qe/v2/selection.json`). Selected: RL = from scratch, lr 3e-4 at every budget; value = DAgger lr 1e-3; classifier varies.
+
+| B | method | val plain / dist | ROxf M / H | RPar M / H | ROxf+1M M / H | RPar+1M M / H |
+|---|---|---|---|---|---|---|
+| 20 | top (expands) | 64.39 / 41.64 | 57.43 / 33.28 | 77.55 / 57.96 | 43.21 / 19.04 | 44.52 / 22.67 |
+| 20 | classifier | 63.67 / 43.61 | 61.73 / 38.05 | 78.05 / 58.37 | 49.42 / 25.88 | 46.14 / 23.81 |
+| 20 | value | 66.27 / 46.02 | 62.40 / 38.09 | 78.04 / 58.31 | 50.71 / 25.19 | 47.04 / 23.90 |
+| 20 | **RL** | **66.66 / 46.41** | **63.93** / 37.83 | 78.08 / 58.30 | **52.75** / 25.50 | **47.13** / 23.61 |
+
+RL - value (* = CI excludes 0):
+- B10: val **+0.49* / +0.56***; benchmarks n.s. except **ROxf H -2.31***.
+- B20: val **+0.39* / +0.39***, **ROxf M +1.53* [+0.40, +2.86], ROxf+1M M +2.04* [+0.81, +3.54]**; Hard and RParis n.s.
+- B40: val **+0.17* / +0.20***; ROxford n.s.; **RParis+1M M -0.48*, H -0.67*, RPar H -0.26***.
+
+RL - classifier: val +1.4 to +4.0 (all *); B20 ROxf M **+2.20***, ROxf+1M M **+3.32***, RPar+1M M **+1.00***; B10 ROxf M **+1.70***, RPar+1M M **+1.34***; B40 RParis (+1M) **-0.56 to -1.03***.
+
+- **First setting where RL beats the strongest supervised policy (value) on held-out validation at every budget** (+0.2 to +0.6, vs <= +0.06 in Track V, L7), as expected when a check's value includes the candidates it unlocks.
+- **B20 benchmark win:** ROxford+1M Medium 52.75 for RL vs 50.71 value, 49.42 classifier and 43.21 for standard similarity-ordered verification; Track V's best at B20 was ~48-49.
+- **Not uniform:** RL is significantly worse on ROxford Hard at B10 and on RParis at B40. RParis queries have ~250 positives and expansion candidates that are 65-81% relevant, against ~20 positives and ~6% on GLDv2, so the training queries rarely reward heavy expansion; the diagnostic below checks how much budget each policy spends on expansion.
+- One descriptor seed only; the benchmark comparisons rest on 70 queries.
+
+### Q3. QE pilot: first signal, two fixes, clean rerun (2026-10-21)
 - **First signal (job 4625040, B = 10 only, 3 policy seeds; old batching, valid gradients):** RL fine-tuned from the value policy raises the validation selection score from 55.39 (value) to 55.83 (+0.44; gld_val +0.35, with distractors +0.53). In Track V the same procedure added at most +0.06 (L7). Benchmarks, unpaired means: ROxf M 59.74 -> 60.83, RPar+1M M 45.82 -> 46.21, but ROxf+1M M 47.94 -> 47.13 and ROxf+1M H 24.58 -> 20.67. Expansion itself helps every method (value at B10: ROxf+1M M 47.94 vs ~44 in Track V).
 - **Out of memory at B = 20** (4625040): differentiating the whole rollout kept B steps of attention activations (2,048 rollouts x 250 candidates). Fixed: the rollout runs without gradients and records states/actions; the policy gradient is accumulated one step and chunk at a time. Matches the one-graph gradient (relative difference 3.6e-6 with chunking, 0.0 without); a first per-parameter check that looked like a 55% mismatch came from attention biases whose gradient is analytically zero (softmax shift invariance).
 - **Speed:** RL from scratch took ~4 h per policy seed at B10, mostly on padding (all queries padded to 250 candidates, GLDv2 queries have ~110-120). Batches now come from one of 8 equal-size groups of queries with similar candidate counts (uniform over queries overall) with padding trimmed; evaluation runs on size-sorted chunks. Per-query APs identical to untrimmed evaluation (max difference 0.0); the position feature keeps a fixed scale.
