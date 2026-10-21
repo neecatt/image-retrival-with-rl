@@ -126,6 +126,10 @@ def main():
     ap.add_argument('--dagger', action='store_true')
     ap.add_argument('--seeds', type=int, nargs='+', default=[0, 1, 2])
     ap.add_argument('--eval_every', type=int, default=200)
+    ap.add_argument('--expand_weight', type=float, default=0.0,
+                    help='fraction of training batches drawn from queries whose expansion candidates include at '
+                         'least --expand_min relevant images (same for every method; validation is unchanged)')
+    ap.add_argument('--expand_min', type=int, default=3)
     a = ap.parse_args()
     dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
@@ -169,6 +173,10 @@ def main():
                 # batches are drawn from one of 8 equal-size groups of queries with similar candidate
                 # counts (uniform over queries overall), so padding can be trimmed per batch
                 groups = torch.argsort(tr.d['valid'].sum(1)).tensor_split(8)
+                useful = torch.nonzero(((tr.d['rel'] == 1) & (tr.d['hop'] > 0)).sum(1) >= a.expand_min).flatten()
+                useful_groups = useful[torch.argsort(tr.d['valid'][useful].sum(1))].tensor_split(4)
+                if a.expand_weight > 0 and len(useful) < 4 * a.batch:
+                    raise SystemExit(f"only {len(useful)} training queries with >= {a.expand_min} relevant expansion candidates")
                 pol = AttnPolicy(n_feat=QEEnv.n_feat).to(dev)
                 if method == 'rl' and a.rl_init != 'none':
                     pol.load_state_dict(trained[(a.rl_init, seed)])
@@ -180,7 +188,10 @@ def main():
                 sel = lambda: float(np.mean([evaluate(envs[k], pol) for k in val_keys]))
                 best, best_state, curve = sel(), {k: x.clone() for k, x in pol.state_dict().items()}, []
                 for it in range(n_it):
-                    g = groups[int(torch.randint(0, len(groups), (1,)))]
+                    if a.expand_weight > 0 and float(torch.rand(1)) < a.expand_weight:
+                        g = useful_groups[int(torch.randint(0, len(useful_groups), (1,)))]
+                    else:
+                        g = groups[int(torch.randint(0, len(groups), (1,)))]
                     bt = sub_env(tr, g[torch.randint(0, len(g), (a.batch,), device=dev)])
                     idx = torch.arange(a.batch, device=dev)
                     if method == 'rl':
