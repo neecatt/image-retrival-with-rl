@@ -2,6 +2,9 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### Q6. Oversampling training queries where expansion pays (2026-10-21, pending)
+Target: RParis, where RL under-expands (Q4 diagnostic). GLDv2 val landmarks are capped at 30 images, so no training landmark resembles RParis (~250 positives); instead, queries whose expansion candidates include >= 3 relevant images (6.9% of the plain pool, 15.7% with distractors) supply half of every training batch (`--expand_weight 0.5 --expand_min 3`), for all methods alike; validation and benchmarks unchanged. One job (4631705, new ResNet seed 42, B = 20, policy seed 0, same configs as Q5, ~2.6 GPU-h): compared with the unweighted Q5 runs of the same seed.
+
 ### Q5. Track V-QE replicated over 5 descriptor seeds, B = 20 (2026-10-21)
 Lean replication (Q4): jobs 4628705, 4628706, 4628708, 4629382, all completed (~3.4 h each, ~13 GPU-h). New ResNet seeds 42, 1, 2, 3, 4; one policy seed each; configs fixed from seed-42 validation (classifier and value: DAgger lr 1e-3 vs 3e-4, chosen per seed on validation; RL from scratch lr 3e-4). Per-query RL - baseline differences averaged over the 5 seeds, bootstrap over queries; per-seed means in seed order 42, 1, 2, 3, 4 (`scripts/analysis/trackv_seeds.py`, `results/qe/v2_lean_5seeds.json`).
 
