@@ -59,15 +59,38 @@ def cat_pools(ds):
 
 
 PER_QUERY = {}
+CANDIDATE_DIMS = {'valid': 1, 'hop': 1, 'inliers': 1, 'sim': 1, 'rank': 1, 'rel': 1, 'unlock': 2, 'cand_sim': 2}
+
+
+def trim(d, idx):
+    """Queries idx with candidate padding cut to the longest candidate list among them (candidates are
+    stored first, padding last) and positive padding cut likewise. Saves the C^2 cost of padding."""
+    sub = {k: v[idx] for k, v in d.items()}
+    c = int(sub['valid'].sum(1).max())
+    p = max(int(sub['npos'].max()), 1)
+    for k, nd in CANDIDATE_DIMS.items():
+        sub[k] = sub[k][:, :c] if nd == 1 else sub[k][:, :c, :c]
+    sub['pos_ranks'] = sub['pos_ranks'][:, :p]
+    return sub
+
+
+def sub_env(env, idx, budget=None):
+    return QEEnv(trim(env.d, idx), env.B if budget is None else budget, env.T, c_norm=env.c_norm)
 
 
 def evaluate(env, scorer, mode='greedy', reps=1, key=None, chunk=512):
+    """Mean AP over the pool; queries are processed in chunks of similar candidate count."""
     dev = env.d['sim'].device
+    order = torch.argsort(env.d['valid'].sum(1))
     with torch.no_grad():
         per = []
         for _ in range(reps):
-            per.append(torch.cat([rollout(env, torch.arange(s, min(s + chunk, env.Q), device=dev), scorer, mode)[0]
-                                  for s in range(0, env.Q, chunk)]))
+            r = torch.empty(env.Q, device=dev)
+            for s in range(0, env.Q, chunk):
+                ids = order[s:s + chunk]
+                se = sub_env(env, ids)
+                r[ids] = rollout(se, torch.arange(len(ids), device=dev), scorer, mode)[0]
+            per.append(r)
         per = torch.stack(per).mean(0)
     if key is not None:
         PER_QUERY.setdefault(key, []).append(per.cpu().numpy())
@@ -143,6 +166,9 @@ def main():
             for seed in a.seeds:
                 torch.manual_seed(seed)
                 tr = QEEnv(train_pool, B, a.threshold)
+                # batches are drawn from one of 8 equal-size groups of queries with similar candidate
+                # counts (uniform over queries overall), so padding can be trimmed per batch
+                groups = torch.argsort(tr.d['valid'].sum(1)).tensor_split(8)
                 pol = AttnPolicy(n_feat=QEEnv.n_feat).to(dev)
                 if method == 'rl' and a.rl_init != 'none':
                     pol.load_state_dict(trained[(a.rl_init, seed)])
@@ -154,32 +180,35 @@ def main():
                 sel = lambda: float(np.mean([evaluate(envs[k], pol) for k in val_keys]))
                 best, best_state, curve = sel(), {k: x.clone() for k, x in pol.state_dict().items()}, []
                 for it in range(n_it):
-                    idx = torch.randint(0, tr.Q, (a.batch,), device=dev)
+                    g = groups[int(torch.randint(0, len(groups), (1,)))]
+                    bt = sub_env(tr, g[torch.randint(0, len(g), (a.batch,), device=dev)])
+                    idx = torch.arange(a.batch, device=dev)
                     if method == 'rl':
                         rep = idx.repeat_interleave(a.samples)
                         rec = []
                         with torch.no_grad():
-                            r, _, _ = rollout(tr, rep, pol, 'sample', record=rec)
+                            r, _, _ = rollout(bt, rep, pol, 'sample', record=rec)
                         r = r.view(a.batch, a.samples)
                         adv = (r - (r.sum(1, keepdim=True) - r) / (a.samples - 1)).flatten()
                         opt.zero_grad()
-                        policy_gradient_backward(tr, rep, pol, adv, rec)
+                        policy_gradient_backward(bt, rep, pol, adv, rec)
                         opt.step(); sched.step()
                     else:
                         with torch.no_grad():
                             kind = it % 3 if a.dagger else it % 2
                             sc, mode = [(sim_scorer, 'greedy'), (zero, 'sample'), (pol, 'sample')][kind]
-                            _, _, ver = rollout(QEEnv(tr.d, int(torch.randint(0, B, (1,))), a.threshold), idx, sc, mode)
-                            avail = tr.available(idx, ver)
+                            _, _, ver = rollout(QEEnv(bt.d, int(torch.randint(0, B, (1,))), a.threshold, c_norm=bt.c_norm),
+                                                idx, sc, mode)
+                            avail = bt.available(idx, ver)
                             if method == 'value':
-                                target = one_step_gains(tr, idx, ver, avail) * 100
-                        fx = tr.features(idx, ver, avail)
-                        pred = score(tr, pol, fx, idx)
+                                target = one_step_gains(bt, idx, ver, avail) * 100
+                        fx = bt.features(idx, ver, avail)
+                        pred = score(bt, pol, fx, idx)
                         m = avail
                         if not m.any():
                             continue
                         loss = (F.mse_loss(pred[m], target[m]) if method == 'value'
-                                else F.binary_cross_entropy_with_logits(pred[m], tr.match[idx][m].float()))
+                                else F.binary_cross_entropy_with_logits(pred[m], bt.match[idx][m].float()))
                         opt.zero_grad(); loss.backward(); opt.step(); sched.step()
                     if (it + 1) % a.eval_every == 0:
                         v = sel(); curve.append(round(100 * v, 3))

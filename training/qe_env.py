@@ -50,9 +50,10 @@ class QEEnv:
     rel (Q,C), pos_ranks (Q,P), npos (Q,)."""
     n_feat = 17
 
-    def __init__(self, data: Dict[str, torch.Tensor], budget: int, threshold: int = 35):
+    def __init__(self, data: Dict[str, torch.Tensor], budget: int, threshold: int = 35, c_norm: int = None):
         self.d, self.B, self.T = data, budget, threshold
         self.Q, self.C = data['valid'].shape
+        self.c_norm = c_norm or self.C        # fixed position scale, so trimmed padding leaves features unchanged
         self.match = (data['inliers'] >= threshold) & data['valid']
 
     def available(self, idx, verified):
@@ -89,7 +90,7 @@ class QEEnv:
         hidden = valid & ~avail & ~verified
         n_children = (unl & hidden[:, None, :]).float().sum(-1)
         n_avail = avail.float().sum(-1, keepdim=True)
-        rank_in = torch.arange(self.C, device=sim.device).float()[None].expand_as(sim) / self.C
+        rank_in = torch.arange(self.C, device=sim.device).float()[None].expand_as(sim) / self.c_norm
         f = torch.stack([sim, rank_in, sim - top1, max_pos, mean_pos, max_neg, wpos, used.expand_as(sim),
                          frac_m.expand_as(sim), (posm.sum(-1, keepdim=True) > 0).float().expand_as(sim),
                          (sim - mu) / sd, hop, (hop > 0).float(), torch.log1p(n_children),
