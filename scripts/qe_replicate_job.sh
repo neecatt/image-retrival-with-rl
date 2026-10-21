@@ -22,9 +22,11 @@ T=/home/vault/b268dc/b268dc21/runs/trackv; E=/home/atuin/b268dc/b268dc21/dataset
 P=/home/vault/b268dc/b268dc21/runs/trackqe/newresnet_seed$S; O=results/qe/v2_s$S
 M=$(ls /home/vault/b268dc/b268dc21/runs/gr_full_c02_e10_seed$S/stage1_*/stage1_best.pth)
 echo "$SLURM_JOB_ID $(date -Is) $(git rev-parse HEAD) seed=$S model=$M"
-if [ ! -f "$P/rparis6k_r1m.npz" ]; then
+MISSING=""; for p in gldv2c_val gldv2c_val_dist roxford5k rparis6k roxford5k_r1m rparis6k_r1m; do [ -f "$P/$p.npz" ] || MISSING="$MISSING $p"; done
+if [ -n "$MISSING" ]; then               # build only the pools a previous run did not finish
+  echo "building pools:$MISSING"
   python scripts/stage_datasets.py gldv2c gldv2d roxford5k rparis6k
-  python scripts/v_precompute_qe.py --data_root "$TMPDIR/data/raw" --model "$M" --plain_pre $T/newresnet_seed${S}_q10k \
+  python scripts/v_precompute_qe.py --pools $MISSING --data_root "$TMPDIR/data/raw" --model "$M" --plain_pre $T/newresnet_seed${S}_q10k \
     --dist_pre $T/newresnet_seed${S}_dist --r1m_pre $T/newresnet_seed${S}_r1m --dist_emb $E/gldv2d/embeddings/newresnet_seed${S}_e512.npy \
     --r1m_emb $E/revisitop1m/embeddings/gr_full_c02_e10_seed${S}_stage1_best_${H}_s1024.npy --out $P 2>&1 | grep -v "it/s\]\|s/it\]"
 fi

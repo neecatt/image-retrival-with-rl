@@ -19,7 +19,11 @@ from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
 import torch
-from PIL import Image
+from PIL import Image, ImageFile
+
+# A few official R1M JPEGs are truncated; decode what is there (PIL pads the rest), as the R1M
+# embeddings do (scripts/eval_r1m.py). Complete images decode identically.
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 from lightglue import ALIKED, LightGlue
 from lightglue.utils import numpy_image_to_torch
