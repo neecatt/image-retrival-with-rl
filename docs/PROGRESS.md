@@ -2,8 +2,22 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
-### Q6. Oversampling training queries where expansion pays (2026-10-21, pending)
-Target: RParis, where RL under-expands (Q4 diagnostic). GLDv2 val landmarks are capped at 30 images, so no training landmark resembles RParis (~250 positives); instead, queries whose expansion candidates include >= 3 relevant images (6.9% of the plain pool, 15.7% with distractors) supply half of every training batch (`--expand_weight 0.5 --expand_min 3`), for all methods alike; validation and benchmarks unchanged. One job (4631705, new ResNet seed 42, B = 20, policy seed 0, same configs as Q5, ~2.6 GPU-h): compared with the unweighted Q5 runs of the same seed.
+### Q6. Oversampling training queries where expansion pays: negative (2026-10-21)
+Target: RParis, where RL under-expands (Q4 diagnostic). GLDv2 val landmarks are capped at 30 images, so no training landmark resembles RParis (~250 positives); instead, queries whose expansion candidates include >= 3 relevant images (6.9% of the plain pool, 15.7% with distractors) supply half of every training batch (`--expand_weight 0.5 --expand_min 3`), for all methods alike; validation and benchmarks unchanged. Job 4631705 (3.2 GPU-h; new ResNet seed 42, B = 20, policy seed 0, same configs as Q5), compared with the unweighted Q5 runs of the same seed (`results/qe/v2w_s42`, `results/qe/v2w_s42_selection.json`).
+
+| B20, seed 42 | val plain / dist | ROxf M / H | RPar M / H | ROxf+1M M / H | RPar+1M M / H |
+|---|---|---|---|---|---|
+| classifier, unweighted | 63.76 / 43.55 | 61.24 / 38.39 | 77.86 / 58.14 | 48.39 / 25.41 | 45.73 / 23.71 |
+| classifier, weighted | 63.52 / 43.65 | 64.46 / 39.42 | 78.51 / 58.86 | 50.65 / 25.21 | 47.18 / 24.47 |
+| value, unweighted | 66.24 / 46.12 | 62.43 / 37.74 | 78.07 / 58.28 | 50.83 / 24.21 | 47.11 / 23.93 |
+| value, weighted | 66.22 / 46.07 | 61.81 / 36.05 | 78.16 / 58.44 | 50.69 / 24.45 | 47.64 / 24.22 |
+| RL, unweighted | 66.67 / 46.41 | 64.01 / 37.84 | 78.10 / 58.26 | 53.03 / 25.54 | 47.33 / 23.51 |
+| RL, weighted | 66.58 / 46.36 | 64.08 / 37.56 | 78.16 / 58.43 | 52.65 / 25.29 | 47.57 / 23.98 |
+
+- Oversampling raises RParis(+1M) a little for every method, the **classifier most** (RPar+1M M +1.45, ROxf M +3.2); RL changes by +0.2 to +0.5 on RParis+1M and loses 0.4 on ROxf+1M M.
+- RL - value with weighting: val +0.37* / +0.29*, ROxf M +2.26*, RParis ties (-0.01 / -0.07): **RL's RParis gap to value is not closed**; RL - classifier becomes significantly negative on ROxf H (-1.86*) and RParis without R1M (-0.35*, -0.43*).
+- Validation slightly prefers the unweighted variant for every method (RL 66.67 vs 66.58, classifier 53.66 vs 53.59 mean val), so under the validation-only rule the weighted variant would not be chosen; its RParis gains appear only on the test benchmarks and are not claimed.
+- Not adopted. The Q5 result (unweighted) stands; RParis stays a stated limitation. One descriptor seed, one policy seed.
 
 ### Q5. Track V-QE replicated over 5 descriptor seeds, B = 20 (2026-10-21)
 Lean replication (Q4): jobs 4628705, 4628706, 4628708, 4629382, all completed (~3.4 h each, ~13 GPU-h). New ResNet seeds 42, 1, 2, 3, 4; one policy seed each; configs fixed from seed-42 validation (classifier and value: DAgger lr 1e-3 vs 3e-4, chosen per seed on validation; RL from scratch lr 3e-4). Per-query RL - baseline differences averaged over the 5 seeds, bootstrap over queries; per-seed means in seed order 42, 1, 2, 3, 4 (`scripts/analysis/trackv_seeds.py`, `results/qe/v2_lean_5seeds.json`).
