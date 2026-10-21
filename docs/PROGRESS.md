@@ -2,6 +2,26 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### Q5. Track V-QE replicated over 5 descriptor seeds, B = 20 (2026-10-21)
+Lean replication (Q4): jobs 4628705, 4628706, 4628708, 4629382, all completed (~3.4 h each, ~13 GPU-h). New ResNet seeds 42, 1, 2, 3, 4; one policy seed each; configs fixed from seed-42 validation (classifier and value: DAgger lr 1e-3 vs 3e-4, chosen per seed on validation; RL from scratch lr 3e-4). Per-query RL - baseline differences averaged over the 5 seeds, bootstrap over queries; per-seed means in seed order 42, 1, 2, 3, 4 (`scripts/analysis/trackv_seeds.py`, `results/qe/v2_lean_5seeds.json`).
+
+Mean over 5 seeds, B = 20:
+
+| method | val plain / dist | ROxf M / H | RPar M / H | ROxf+1M M / H | RPar+1M M / H |
+|---|---|---|---|---|---|
+| no verification | 62.71 / 38.16 | 52.77 / 28.11 | 77.33 / 57.73 | 38.21 / 14.29 | 43.91 / 21.93 |
+| top-20 by similarity (expands) | 64.58 / 41.57 | 57.00 / 33.73 | 77.51 / 57.86 | 43.62 / 20.71 | 44.31 / 22.22 |
+| classifier | 64.01 / 43.47 | 61.09 / 38.42 | 77.93 / 58.31 | 48.52 / 25.82 | 45.59 / 23.09 |
+| value | 66.50 / 46.01 | 61.60 / 37.58 | 77.93 / 58.16 | 50.66 / 24.97 | 46.83 / 23.50 |
+| **RL** | **66.86 / 46.36** | **63.34** / 38.05 | 77.94 / 58.16 | **52.25** / 25.26 | 46.82 / 23.36 |
+
+RL - value: **val +0.36 [+0.28, +0.44] / +0.35 [+0.28, +0.42]** (5/5 seeds, p < 0.001); **ROxf M +1.74 [+0.77, +2.90]** (5/5, per seed +1.59 +0.72 +2.52 +3.16 +0.72, p = 0.023); **ROxf+1M M +1.59 [+0.72, +2.56]** (5/5, p = 0.027); ROxf H +0.48, ROxf+1M H +0.30, RParis within +-0.15 (all n.s.).
+RL - classifier: val +2.9 (5/5); **ROxf M +2.24*, ROxf+1M M +3.73*, RPar+1M M +1.24*** (5/5 on the +1M sets); Hard and RParis without R1M n.s.
+
+- **0 significant losses and 9 significant wins in the 20 RL - baseline comparisons.**
+- **First replicated, controlled RL win over the strongest supervised policy:** with verified query expansion, a check's value includes the relevant images it unlocks, which the one-step value policy cannot see; RL beats it on held-out GLDv2 validation in every seed and on ROxford Medium with and without R1M in every seed. In Track V without expansion the same comparison was a tie (L6, L7).
+- **Limits:** gains are on ROxford Medium only; Hard and RParis are ties (RParis: RL under-expands, see Q4 diagnostic). One budget (B = 20) was replicated; B10 / B40 showed mixed results on seed 42 (Q4). Benchmarks have 70 queries; the seed-level t-tests use n = 5.
+
 ### Q4. Track V-QE results, new ResNet seed 42 (2026-10-21)
 63 jobs (all completed, 65 GPU-h, longest 4.5 h), merged per config (`results/qe/v2/merged`); each method's config chosen per budget on mean GLDv2 validation (plain + distractors); paired bootstrap over queries (`results/qe/v2/selection.json`). Selected: RL = from scratch, lr 3e-4 at every budget; value = DAgger lr 1e-3; classifier varies.
 
