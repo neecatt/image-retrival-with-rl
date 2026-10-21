@@ -23,6 +23,7 @@ ap.add_argument('--n', type=int, default=10000)
 ap.add_argument('--out')
 a = ap.parse_args()
 rng = np.random.default_rng(0)
+HEUR = ['none', 'top', 'shortlist', 'all_K']          # whichever the run type has
 seeds = {}
 for spec in a.seed:
     name, dirs = spec.split('=', 1)
@@ -35,13 +36,15 @@ for B in a.budgets:
     per = {}                       # seed -> method -> (dir name, means, per-query dict)
     for s, runs in seeds.items():
         per[s] = {}
-        for m in a.methods + ['none', 'top', 'all_K']:
+        for m in a.methods + [h for h in HEUR if any(h in r[f'B{B}'] for _, r, _ in runs)]:
             cand = [(r[f'B{B}'][m].get('selection', 0.0), n, r, z) for n, r, z in runs if m in r[f'B{B}']]
             sc, n, r, z = max(cand, key=lambda t: t[0])
             per[s][m] = (n, r[f'B{B}'][m], z)
     print(f"\n=== B={B}  selected per seed: " + '; '.join(
         f"{s}: " + ','.join(f"{m[0]}={per[s][m][0].split('_', 3)[-1]}" for m in a.methods) for s in seeds))
-    means = {m: {p: float(np.mean([per[s][m][1][p] for s in seeds])) for p in pools} for m in ['none', 'top'] + a.methods + ['all_K']}
+    shown = [h for h in HEUR if h != 'all_K' and all(h in per[s] for s in seeds)] + a.methods + \
+            [h for h in HEUR if h == 'all_K' and all(h in per[s] for s in seeds)]
+    means = {m: {p: float(np.mean([per[s][m][1][p] for s in seeds])) for p in pools} for m in shown}
     print(f"{'mean over seeds':14s} " + ' '.join(f"{p[:20]:>20s}" for p in pools))
     for m in means:
         print(f"{m:14s} " + ' '.join(f"{100 * means[m][p]:20.2f}" for p in pools))
