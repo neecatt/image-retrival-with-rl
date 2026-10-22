@@ -2,8 +2,22 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
-### Q7. Track V-QE replication at B = 40 (2026-10-22, pending)
-Same lean protocol as Q5 at a second budget: jobs 4649367-70 (new ResNet seeds 1-4, expansion data reused from Q5, ~5.2 GPU-h each, ~21 GPU-h; `results/qe/v2_s<seed>/*_B40_s0`); seed 42 from the Q4 grid (`results/qe/v2/*_B40_s0`). On seed 42 alone (Q4) B40 was mixed: RL beat value on validation (+0.17*/+0.20*) but lost on RParis(+1M) (-0.26* to -0.67*).
+### Q7. Track V-QE replication at B = 40: mixed (2026-10-22)
+Same lean protocol as Q5 at a second budget: jobs 4649367-70 (new ResNet seeds 1-4, expansion data reused, ~5.0 h each, ~20 GPU-h); seed 42 from the Q4 grid. Per-seed means in seed order 42, 1, 2, 3, 4 (`results/qe/v2_lean_5seeds_b40.json`).
+
+Mean over 5 seeds, B = 40:
+
+| method | val plain / dist | ROxf M / H | RPar M / H | ROxf+1M M / H | RPar+1M M / H |
+|---|---|---|---|---|---|
+| top-40 by similarity (expands) | 64.94 / 42.79 | 59.42 / 36.28 | 77.75 / 58.08 | 45.61 / 22.22 | 44.91 / 22.63 |
+| classifier | 64.46 / 45.20 | **65.62 / 41.29** | **78.73 / 59.11** | 53.66 / **27.80** | 47.93 / **24.41** |
+| value | 66.84 / 46.39 | 64.60 / 39.14 | 78.36 / 58.58 | **53.69** / 26.54 | **48.22** / 24.34 |
+| RL | **67.01 / 46.54** | 64.74 / 40.14 | 78.25 / 58.44 | 53.57 / 26.94 | 47.59 / 23.86 |
+
+- RL - value: val **+0.16* / +0.14*** (5/5); **ROxf H +1.01***, **ROxf+1M H +0.40***; ROxford Medium ties; **RParis+1M M -0.63*, H -0.48*** (0/5 seeds positive). 4 significant wins, 2 significant losses in 10.
+- RL - classifier: val **+2.55* / +1.33***, but **6 significant benchmark losses** (ROxf M -0.88, ROxf+1M H -0.86, RParis M/H -0.48/-0.68, RParis+1M M/H -0.34/-0.55; 0/5 seeds positive on each).
+- At B = 40 the classifier, which is the weakest method on GLDv2 validation, is the best on the benchmarks: validation and benchmarks disagree at large budgets, and the validation-only rule does not pick it. With 40 of ~250 candidates checked, simply verifying likely matches (and expanding through them) is close to enough, so planning matters less.
+- **Conclusion across budgets:** RL's controlled advantage over the strongest supervised policy is budget-dependent: clear and replicated at B = 20 on ROxford Medium (Q5), absent at B = 40 on ROxford Medium and negative on RParis+1M. The claim to make is "RL helps when the verification budget is tight relative to the expansion opportunities", not a general win.
 
 ### Q6. Oversampling training queries where expansion pays: negative (2026-10-21)
 Target: RParis, where RL under-expands (Q4 diagnostic). GLDv2 val landmarks are capped at 30 images, so no training landmark resembles RParis (~250 positives); instead, queries whose expansion candidates include >= 3 relevant images (6.9% of the plain pool, 15.7% with distractors) supply half of every training batch (`--expand_weight 0.5 --expand_min 3`), for all methods alike; validation and benchmarks unchanged. Job 4631705 (3.2 GPU-h; new ResNet seed 42, B = 20, policy seed 0, same configs as Q5), compared with the unweighted Q5 runs of the same seed (`results/qe/v2w_s42`, `results/qe/v2w_s42_selection.json`).
