@@ -2,6 +2,9 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### Q8. Track V-QE on the DINOv2 baseline (2026-10-23, pending)
+Goal: respectable absolute numbers and a check that RL's B = 20 advantage holds on a strong descriptor. DINOv2 Stage 1 + WiSE-FT (`runs/wise_ft/gd_full_c04_e6.pth`, ROxf M/H 68.14 / 48.67, +R1M 58.44 / 36.52). Two jobs (`scripts/qe_replicate_job.sh dinov2wise`): 4658686 = expansion precompute + policy seed 0 (~4 GPU-h), 4658687 = policy seed 1 (~2.6 GPU-h, after the first). B = 20; configs transferred from the new-ResNet seed-42 validation selection (not re-tuned on DINOv2): classifier/value with DAgger at lr 1e-3 / 3e-4 (chosen on DINOv2 validation), RL from scratch lr 3e-4. Sanity check: no-verification AP must reproduce 68.14 / 48.67.
+
 ### Q7. Track V-QE replication at B = 40: mixed (2026-10-22)
 Same lean protocol as Q5 at a second budget: jobs 4649367-70 (new ResNet seeds 1-4, expansion data reused, ~5.0 h each, ~20 GPU-h); seed 42 from the Q4 grid. Per-seed means in seed order 42, 1, 2, 3, 4 (`results/qe/v2_lean_5seeds_b40.json`).
 
