@@ -2,8 +2,21 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
-### Q8. Track V-QE on the DINOv2 baseline (2026-10-23, pending)
-Goal: respectable absolute numbers and a check that RL's B = 20 advantage holds on a strong descriptor. DINOv2 Stage 1 + WiSE-FT (`runs/wise_ft/gd_full_c04_e6.pth`, ROxf M/H 68.14 / 48.67, +R1M 58.44 / 36.52). Two jobs (`scripts/qe_replicate_job.sh dinov2wise`): 4658686 = expansion precompute + policy seed 0 (~4 GPU-h), 4658687 = policy seed 1 (~2.6 GPU-h, after the first). B = 20; configs transferred from the new-ResNet seed-42 validation selection (not re-tuned on DINOv2): classifier/value with DAgger at lr 1e-3 / 3e-4 (chosen on DINOv2 validation), RL from scratch lr 3e-4. Sanity check: no-verification AP must reproduce 68.14 / 48.67.
+### Q8. Track V-QE on the DINOv2 baseline (2026-10-23)
+DINOv2 Stage 1 + WiSE-FT (`runs/wise_ft/gd_full_c04_e6.pth`). Jobs 4658686 (expansion precompute + policy seed 0, 3.5 h) and 4658687 (policy seed 1, 2.5 h), ~5.9 GPU-h. B = 20; configs transferred from the new-ResNet seed-42 validation selection (classifier/value DAgger lr 1e-3 vs 3e-4 chosen on DINOv2 validation; RL from scratch lr 3e-4); not re-tuned on DINOv2. Expansion: ROxford 23 candidates per query (55% relevant, Medium), ROxford+1M 29 (43%), RParis(+1M) ~45 (88%); GLDv2 val 5.6 (3.4%), with distractors 15.8 (4.1%). **Sanity check passed:** no verification reproduces ROxf 68.14 / 48.67, ROxf+1M 58.44 / 36.52, RPar 91.11 / 80.67, RPar+1M 83.02 / 66.17 exactly. Means over 2 policy seeds (one descriptor; `seeds+` below counts policy seeds), `results/qe/dinov2_b20.json`.
+
+| B20, DINOv2 | val plain / dist | ROxf M / H | RPar M / H | ROxf+1M M / H | RPar+1M M / H |
+|---|---|---|---|---|---|
+| no verification | 78.10 / 58.40 | 68.14 / 48.67 | 91.11 / 80.67 | 58.44 / 36.52 | 83.02 / 66.17 |
+| top-20 by similarity (expands) | 78.25 / 59.40 | 71.41 / 52.53 | 91.25 / 80.81 | 61.93 / 39.55 | 83.17 / 66.31 |
+| classifier | 78.10 / 58.93 | 70.83 / 50.69 | 91.29 / 80.94 | 61.33 / 38.21 | 83.24 / 66.52 |
+| value | 79.09 / 61.24 | 73.83 / 54.31 | 91.29 / 80.90 | 64.95 / 42.78 | 83.27 / 66.51 |
+| **RL** | **79.28 / 61.54** | **75.09 / 54.31** | 91.23 / 80.69 | **67.68 / 43.81** | 83.22 / 66.30 |
+
+- RL - value: val **+0.19* / +0.31***, **ROxf M +1.27* [+0.32, +2.50]**, **ROxf+1M M +2.72* [+0.85, +4.99]** (both policy seeds positive), ROxf+1M H +1.03 (n.s.), ROxf H tie; RParis small losses (RPar H **-0.21***, others n.s.; RParis is near saturation at 91 / 83).
+- RL - classifier: ROxf M/H **+4.26* / +3.62***, ROxf+1M M/H **+6.35* / +5.60***; RParis H -0.2*. With DINOv2 the classifier is below plain top-20 verification on ROxford.
+- **The B20 result transfers to a strong descriptor, with a larger margin on ROxford+1M (+2.7 vs +1.6 on the new ResNet)** and much better absolute numbers: ROxford+1M Medium 58.44 (no verification) -> 61.93 (standard top-20) -> 64.95 (value) -> **67.68 (RL)**; ROxford Medium 68.14 -> **75.09**.
+- Limits: one DINOv2 model, 2 policy seeds, hyperparameters transferred from ResNet; RParis shows no gain (saturated and RL under-expands there, Q4).
 
 ### Q7. Track V-QE replication at B = 40: mixed (2026-10-22)
 Same lean protocol as Q5 at a second budget: jobs 4649367-70 (new ResNet seeds 1-4, expansion data reused, ~5.0 h each, ~20 GPU-h); seed 42 from the Q4 grid. Per-seed means in seed order 42, 1, 2, 3, 4 (`results/qe/v2_lean_5seeds_b40.json`).
