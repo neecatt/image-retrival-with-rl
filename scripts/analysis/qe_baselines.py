@@ -34,8 +34,10 @@ VQE_GRID = [0.0, 1.0, 3.0]
 
 
 def gld_map(sim, qs, labels, chunk=64):
-    """Mean AP over GLDv2 queries; sim (Q, N) on GPU with the query itself at -inf (junk, ranked last)."""
-    lab = torch.as_tensor(labels, device=sim.device)
+    """Mean AP over GLDv2 queries; sim (Q, N) on GPU with the query itself at -inf (junk, ranked last).
+    Gallery items beyond len(labels) are distractors (label -1, never relevant; landmark ids are >= 0)."""
+    lab = torch.full((sim.shape[1],), -1, dtype=torch.long, device=sim.device)
+    lab[:len(labels)] = torch.as_tensor(labels, device=sim.device)
     aps = []
     for s in range(0, sim.shape[0], chunk):
         sb = sim[s:s + chunk]
