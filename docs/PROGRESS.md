@@ -2,6 +2,25 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### Q13. Re-query reward over 5 descriptor seeds (2026-10-24)
+Jobs 4673832-35 (seeds 1-4, ~2.6 h each, ~10.3 GPU-h) + Q12 (seed 42); same configs, policy seed 0, all three schedulers retrained with the re-query reward; exact full re-query on the benchmarks. Per-query differences averaged over the 5 seeds, bootstrap over queries; seeds+ = seeds with a positive mean (`results/qe/policy_vqe/newresnet_seed*_rq.json`, `scripts/analysis/qe_policy_vqe_summary.py`).
+
+Validation (re-query AP, mean of plain and distractor pools), seeds 42 / 1 / 2 / 3 / 4: classifier 56.01 / 56.45 / 56.40 / 56.23 / 56.32; value 60.20 / 60.52 / 60.51 / 60.41 / 60.52; **RL 60.58 / 61.01 / 61.15 / 60.77 / 60.90** (RL best in 5/5, +0.36 to +0.64 over value).
+
+| mean of 5 seeds, B20 + re-query, M / H | ROxf | ROxf+1M | RPar | RPar+1M |
+|---|---|---|---|---|
+| no verification | 52.77 / 28.11 | 38.21 / 14.29 | 77.33 / 57.73 | 43.91 / 21.93 |
+| classic verified QE (20 most similar) | 63.42 / 38.34 | 51.00 / 24.74 | 83.53 / 66.86 | 53.47 / 28.53 |
+| classifier | 66.26 / 42.06 | 53.85 / 27.92 | **85.83 / 69.83** | 58.60 / 33.91 |
+| value | 67.62 / 41.73 | 56.49 / 28.92 | 84.57 / 68.18 | **60.30 / 34.31** |
+| **RL** | **68.14 / 42.85** | **58.31 / 30.14** | 84.64 / 68.23 | 59.24 / 33.30 |
+
+- RL - classic verified QE: ROxf **+4.72* / +4.52***, ROxf+1M **+7.32* / +5.39***, RPar **+1.12* / +1.37***, RPar+1M **+5.77* / +4.78*** (5/5 seeds except RPar H 4/5).
+- RL - value: ROxf+1M M **+1.83* [+0.20, +4.09]** (4/5), ROxf+1M H +1.22 [-0.03, +2.84], ROxf H +1.13 [-0.10, +2.41], ROxf M +0.52 (n.s.); RPar ties; **RPar+1M M -1.06* (0/5), H -1.00* (1/5)**.
+- RL - classifier: ROxf M **+1.88***, ROxf+1M M **+4.47*** (5/5), ROxf+1M H **+2.22***; RPar **-1.19* / -1.60***; RPar+1M ties.
+- Matches found per query: classic 10.2, classifier 13.1, value 11.3, RL 13.2.
+- **Summary:** in the full pipeline (learned scheduling + expansion + verified-QE re-query), all learned schedulers beat classic verified QE by large margins; RL is the best scheduler on validation in every seed and on ROxford+1M (+1.8 over value, +4.5 over the classifier), but loses ~1 mAP to value on RParis+1M and to the classifier on RParis. RL's advantage is dataset-dependent, not uniform.
+
 ### Q12. Schedulers retrained with the re-query reward (2026-10-24)
 Job 4671621 (2.6 h; `training/qe_requery.py`, `scripts/qe_requery_job.sh`). Reward / selection = verified-QE re-query AP over per-query subsets (top-1000 + positives + candidates; X = 1,037 / 1,098 for the plain / distractor pools); unit tests: subset AP equals the exact full-gallery re-query (8e-8) and the vectorised one-step gains equal brute force (0). New ResNet seed 42, B = 20, policy seed 0, configs as selected in Q5; classifier, value (re-query one-step targets) and RL all retrained; benchmarks with the exact full re-query (`results/qe/policy_vqe/newresnet_seed42_rq.json`).
 
