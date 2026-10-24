@@ -2,6 +2,28 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### Q10. Classic verified QE beats the QE-environment pipeline (2026-10-24)
+Job 4664171 (29 min; `scripts/analysis/qe_baselines.py`, `results/qe/baselines/<descriptor>.json`). Baselines chosen on GLDv2 validation (mean of plain and distractor pools): alpha-QE n = 2-3, alpha = 0; verified QE (verify the B = 20 most similar, matches first by inliers, re-query the whole gallery with q + sum of matches, alpha = 0).
+
+| B = 20, Medium / Hard | ROxf | ROxf+1M | RPar | RPar+1M |
+|---|---|---|---|---|
+| ResNet (5 seeds): none | 52.77 / 28.11 | 38.21 / 14.29 | 77.33 / 57.73 | 43.91 / 21.93 |
+| ResNet: alpha-QE | 55.68 / 31.61 | 42.15 / 18.05 | 79.75 / 61.15 | 48.36 / 24.86 |
+| ResNet: **verified QE** | **63.42 / 38.34** | 51.00 / 24.74 | **83.53 / 66.86** | **53.47 / 28.53** |
+| ResNet: value (QE env) | 61.60 / 37.58 | 50.66 / 24.97 | 77.93 / 58.16 | 46.83 / 23.50 |
+| ResNet: RL (QE env) | 63.34 / 38.05 | **52.25 / 25.26** | 77.94 / 58.16 | 46.82 / 23.36 |
+| ResNet: verify all (~250) with expansion | 68.56 / 43.30 | 57.26 / 29.56 | 80.34 / 60.76 | 52.89 / 28.07 |
+| DINOv2: none | 68.14 / 48.67 | 58.44 / 36.52 | 91.11 / 80.67 | 83.02 / 66.17 |
+| DINOv2: alpha-QE | 71.60 / 51.85 | 61.94 / 39.43 | 92.02 / 82.24 | 84.98 / 69.57 |
+| DINOv2: **verified QE** | **79.88 / 60.11** | **69.63 / 46.13** | **92.84 / 84.16** | **86.83 / 73.13** |
+| DINOv2: RL (QE env) | 75.09 / 54.31 | 67.68 / 43.81 | 91.23 / 80.69 | 83.22 / 66.30 |
+| DINOv2: verify all with expansion | 78.00 / 56.42 | 68.79 / 43.87 | 92.46 / 82.21 | 84.53 / 68.13 |
+
+- **Classic spatially verified QE (Chum et al. 2007) with the same 20 checks matches or beats the RL pipeline almost everywhere**: ties on ResNet ROxf, much better on RParis (+5.6 RPar M, +6.7 RPar+1M M), and on DINOv2 better on every protocol (ROxf M +4.8, ROxf+1M M +2.0, RPar+1M M +3.6); on DINOv2 it even beats verifying all ~250 candidates with our re-ranking rule. Only ResNet ROxf+1M M favours RL (+1.25).
+- Cause: the QE environment's rule only moves verified matches to the top and keeps everything else in the global order; verified QE re-queries the whole gallery with the matches, which also lifts relevant images that were never verified.
+- **Consequence:** RL's controlled advantage (Q5, Q8) is real but holds inside a weaker re-ranking rule; a paper cannot claim a better system without beating verified QE. Open question: does choosing which images to verify help on top of verified QE (better matches for the re-query)? Cheap test: re-query with the matches found by the saved RL / value / classifier policies.
+- Timings (one RTX PRO 6000): verifier ~200 pairs/s (~5 ms per check, ~0.1 s per query at B = 20); policy step ~1 ms per 70 queries (negligible); 1M-image search < 0.1 ms per query.
+
 ### Q9. Literature check and EGT-style baseline (2026-10-24)
 - Literature (`docs/LITERATURE_QE.md`): no paper found that learns a per-query verification schedule under a fixed budget for landmark retrieval, or couples one with verified neighbour expansion (targeted search, not exhaustive). Closest: rEGT (Chang et al., CVPR 2019), which verifies all n*k database graph edges offline (incl. R1M) plus k = 100 per query and traverses with a hand-set explore/exploit threshold; our setting has no offline database verification and a fixed online budget. Current systems (author-reported): RN101-SuperGlobal + rerank ROxf 90.9 / 80.2, ROxf+1M 84.4 / 71.1; RN101-CVNet + rerank 87.2 / 75.9, 81.9 / 67.4; rEGT (2019) 83.5 / 65.8, 74.9 / 54.1.
 - **EGT-style rule under the same online budget** (`scripts/analysis/qe_egt_baseline.py`, job 4664079, 2 min): exploit the unlocked neighbour of the best verified parent if its inliers >= t, else verify the most similar available candidate; t chosen on GLDv2 validation (t = 50 for all six descriptors; t = inf reproduces similarity order exactly). Mean over 5 new-ResNet seeds, B20: ROxf M/H 58.16 / 33.83, ROxf+1M 46.05 / 20.55, RPar+1M 45.42 / 22.61 (RL: 63.34 / 38.05, 52.25 / 25.26, 46.82 / 23.36); B40: ROxf+1M M 49.72 (RL 53.57). DINOv2 B20: ROxf M 72.03, ROxf+1M M 62.31 (RL 75.09, 67.68). The hand-set traversal rule is well below the learned schedulers on ROxford and close to them on RParis; the value policy remains the strongest baseline.
