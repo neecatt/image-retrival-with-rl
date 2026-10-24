@@ -62,6 +62,9 @@ class QEEnv:
         return ((self.d['hop'][idx] == 0) | unlocked) & self.d['valid'][idx] & ~verified
 
     def reward(self, idx, verified):
+        if 'rq_S' in self.d:                    # verified-QE re-query reward (training/qe_requery.py)
+            from training.qe_requery import requery_ap
+            return requery_ap(self.d, idx, verified & self.match[idx], self.d['inliers'][idx])
         front = verified & self.match[idx] & (self.d['rank'][idx] >= 0)
         return final_ap(front, self.d['inliers'][idx], self.d['rank'][idx], self.d['pos_ranks'][idx], self.d['npos'][idx])
 

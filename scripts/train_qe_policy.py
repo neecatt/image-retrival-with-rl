@@ -54,6 +54,10 @@ def cat_pools(ds):
         xs = [d[k] for d in ds]
         if k == 'pos_ranks':
             xs = [F.pad(x, (0, P - x.shape[1]), value=-1) for x in xs]
+        if k in ('rq_s', 'rq_rel', 'rq_S'):                      # re-query subsets differ in size: pad X
+            X = max(x.shape[-1] for x in xs)
+            fill = {'rq_s': float('-inf'), 'rq_rel': -1, 'rq_S': 0}[k]
+            xs = [F.pad(x, (0, X - x.shape[-1]), value=fill) for x in xs]
         out[k] = torch.cat(xs)
     return out
 
@@ -71,6 +75,8 @@ def trim(d, idx):
     for k, nd in CANDIDATE_DIMS.items():
         sub[k] = sub[k][:, :c] if nd == 1 else sub[k][:, :c, :c]
     sub['pos_ranks'] = sub['pos_ranks'][:, :p]
+    if 'rq_S' in sub:                                            # re-query data: candidate dimension only
+        sub['rq_S'] = sub['rq_S'][:, :c]; sub['rq_cpos'] = sub['rq_cpos'][:, :c]
     return sub
 
 
@@ -112,7 +118,12 @@ def main():
     ap.add_argument('--pre', required=True, help='v_precompute_qe.py output dir')
     ap.add_argument('--out', required=True)
     ap.add_argument('--train_pools', nargs='+', default=['gldv2c_val', 'gldv2c_val_dist'])
-    ap.add_argument('--bench_pools', nargs='+', default=['roxford5k', 'rparis6k', 'roxford5k_r1m', 'rparis6k_r1m'])
+    ap.add_argument('--bench_pools', nargs='*', default=['roxford5k', 'rparis6k', 'roxford5k_r1m', 'rparis6k_r1m'])
+    ap.add_argument('--requery_reward', action='store_true',
+                    help='train and select with the verified-QE re-query AP (training/qe_requery.py); needs '
+                         '--data_root (staged gldv2c), --model and --dist_emb')
+    ap.add_argument('--data_root'); ap.add_argument('--model'); ap.add_argument('--dist_emb')
+    ap.add_argument('--requery_M', type=int, default=1000)
     ap.add_argument('--budgets', type=int, nargs='+', default=[10, 20, 40])
     ap.add_argument('--threshold', type=int, default=35)
     ap.add_argument('--methods', nargs='+', default=['classifier', 'value', 'rl'])
@@ -136,8 +147,26 @@ def main():
     pre = Path(a.pre)
 
     pools, train_parts, val_keys = {}, [], []
+    if a.requery_reward:
+        from data.dataset import get_transforms
+        from data.dataset_sfm120k import load_gldv2c
+        from evaluate import create_model_from_checkpoint
+        from evaluation.sfm_val import extract_embeddings
+        from training.qe_requery import build as build_requery
+        net = create_model_from_checkpoint(a.model, dev).eval()
+        _, val = load_gldv2c(str(Path(a.data_root) / 'gldv2c'), val_transform=get_transforms(512, 'eval'))
+        with torch.no_grad():
+            emb, _ = extract_embeddings(net, val, dev, batch_size=64, num_workers=16)
+        emb = F.normalize(emb.float(), dim=1); del net
     for name in a.train_pools:
         d, z = load_pool(pre / f'{name}.npz', dev)
+        if a.requery_reward:
+            assert np.array_equal(np.asarray(val.labels), z['labels'])
+            G = torch.cat([emb, F.normalize(torch.from_numpy(np.load(a.dist_emb).astype(np.float32)).to(dev), dim=1)]) \
+                if name.endswith('dist') else emb
+            d.update(build_requery(G, z['queries'], z['cand'], z['labels'], len(z['labels']), a.requery_M))
+            print(name, 're-query subsets: X =', d['rq_s'].shape[1], flush=True)
+            del G; torch.cuda.empty_cache()
         lm = z['labels'][z['queries']]
         is_tr = (lm * 2654435761 % 3) != 0                    # landmark-level split, as in Track V
         tr = torch.tensor(np.where(is_tr)[0], device=dev); va = torch.tensor(np.where(~is_tr)[0], device=dev)
@@ -212,7 +241,12 @@ def main():
                                                 idx, sc, mode)
                             avail = bt.available(idx, ver)
                             if method == 'value':
-                                target = one_step_gains(bt, idx, ver, avail) * 100
+                                if a.requery_reward:
+                                    from training.qe_requery import requery_gains
+                                    target = requery_gains(bt.d, idx, ver & bt.match[idx], bt.d['inliers'][idx],
+                                                           avail, bt.match[idx]) * 100
+                                else:
+                                    target = one_step_gains(bt, idx, ver, avail) * 100
                         fx = bt.features(idx, ver, avail)
                         pred = score(bt, pol, fx, idx)
                         m = avail
