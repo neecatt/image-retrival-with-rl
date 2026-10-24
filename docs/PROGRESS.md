@@ -2,6 +2,24 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### Q11. Policy-chosen verifications + verified-QE re-query (2026-10-24)
+Job 4664543 (45 min; `scripts/analysis/qe_policy_vqe.py`, summary `scripts/analysis/qe_policy_vqe_summary.py`, `results/qe/policy_vqe/<descriptor>.json`). The saved B = 20 policies of Q5 / Q8 (configs selected on validation; trained with the promote-only reward, not retrained) choose the 20 verifications; all verified matches feed the verified-QE re-query of Q10 (alpha = 0, chosen on GLDv2 validation). Sanity: 'shortlist' (the 20 most similar) reproduces classic verified QE (ResNet ROxf M 63.42; DINOv2 79.88 / 60.14 vs 60.11 in Q10, tie-breaking).
+
+New ResNet, mean over 5 descriptor seeds (per-query differences averaged over seeds, bootstrap; seeds+ = seeds with positive mean):
+
+| B20 + re-query, M / H | ROxf | ROxf+1M | RPar | RPar+1M |
+|---|---|---|---|---|
+| classic verified QE (20 most similar) | 63.42 / 38.34 | 51.00 / 24.74 | 83.53 / 66.86 | 53.47 / 28.53 |
+| classifier-chosen | 67.01 / 42.71 | 55.35 / 29.38 | **85.83 / 69.64** | 58.57 / 33.47 |
+| value-chosen | 67.24 / 41.95 | 57.10 / 29.50 | 84.36 / 67.75 | **59.66 / 34.12** |
+| **RL-chosen** | **68.41 / 42.89** | **58.67 / 30.41** | 84.30 / 67.70 | 59.11 / 33.72 |
+
+- RL - classic verified QE: **ROxf M +5.00* / H +4.55*, ROxf+1M M +7.67* / H +5.66*, RPar+1M M +5.64* / H +5.19*** (all 5/5 seeds); RPar +0.8 (n.s.). Matches found per query: shortlist 10.2, classifier 13.0, value 12.7, RL 13.1.
+- RL - value: **ROxf M +1.17* (4/5), ROxf+1M M +1.57* (5/5)**, ROxf H +0.94, ROxf+1M H +0.91 (n.s.); RParis ties (-0.06 to -0.55, n.s.).
+- DINOv2 (2 policy seeds): RL-chosen ROxf 81.83 / 62.86, ROxf+1M 74.76 / 53.66, RPar+1M 86.62 / 72.82, vs classic verified QE 79.88 / 60.14, 69.63 / 46.13, 86.83 / 73.13: **ROxf+1M +5.13* / +7.53*, ROxf H +2.73***; RParis ties; RL - value +1.2 to +2.9 on ROxford (n.s., one model).
+- **With the re-query, scheduling the 20 checks well pays off strongly** (+5 to +8 mAP over classic verified QE on ROxford+1M and RParis+1M), and RL is the best scheduler on ROxford in both descriptors. DINOv2 + RL scheduling + re-query reaches ROxf+1M 74.76 / 53.66, on par with rEGT (74.9 / 54.1), which verifies the whole database graph offline; still below SuperGlobal / CVNet re-ranking (84.4 / 71.1, 81.9 / 67.4).
+- Caveats: the policies were not trained with the re-query in the reward; the re-query step was added after seeing benchmark results of the promote-only pipeline (Q10), with its setting chosen on validation; 70 queries per benchmark. Next: retrain RL with the re-query in the reward (one seed).
+
 ### Q10. Classic verified QE beats the QE-environment pipeline (2026-10-24)
 Job 4664171 (29 min; `scripts/analysis/qe_baselines.py`, `results/qe/baselines/<descriptor>.json`). Baselines chosen on GLDv2 validation (mean of plain and distractor pools): alpha-QE n = 2-3, alpha = 0; verified QE (verify the B = 20 most similar, matches first by inliers, re-query the whole gallery with q + sum of matches, alpha = 0).
 
