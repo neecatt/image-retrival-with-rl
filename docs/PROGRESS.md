@@ -2,6 +2,23 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### Q12. Schedulers retrained with the re-query reward (2026-10-24)
+Job 4671621 (2.6 h; `training/qe_requery.py`, `scripts/qe_requery_job.sh`). Reward / selection = verified-QE re-query AP over per-query subsets (top-1000 + positives + candidates; X = 1,037 / 1,098 for the plain / distractor pools); unit tests: subset AP equals the exact full-gallery re-query (8e-8) and the vectorised one-step gains equal brute force (0). New ResNet seed 42, B = 20, policy seed 0, configs as selected in Q5; classifier, value (re-query one-step targets) and RL all retrained; benchmarks with the exact full re-query (`results/qe/policy_vqe/newresnet_seed42_rq.json`).
+
+| seed 42, B20 + re-query, M / H | val (re-query) | ROxf | ROxf+1M | RPar | RPar+1M |
+|---|---|---|---|---|---|
+| classic verified QE | | 65.31 / 38.48 | 51.46 / 23.10 | 83.53 / 66.75 | 53.44 / 28.54 |
+| classifier (retrained) | 56.01 | 69.61 / 44.17 | 56.86 / 30.29 | **87.43 / 71.50** | **61.27 / 37.21** |
+| value (retrained) | 60.20 | **69.70** / 42.56 | 57.61 / 29.80 | 84.96 / 68.53 | 59.76 / 33.71 |
+| RL (retrained) | **60.58** | 69.18 / 43.15 | **58.63** / 29.97 | 84.45 / 68.02 | 58.73 / 32.60 |
+| RL (reused, promote-only reward, Q11) | | 69.03 / 42.32 | 59.01 / 30.42 | 84.14 / 67.73 | 56.78 / 31.56 |
+
+- RL - classic verified QE: +3.9 to +7.2 on ROxford(+1M), +5.3 / +4.1 on RParis+1M (all significant).
+- **RL - value: no significant difference** (ROxf M -0.52, ROxf+1M M +1.02, RPar+1M M -1.03; all CIs include 0). **RL - classifier: significantly worse on RParis** (-3.0 / -3.5, +1M -2.5 / -4.6), ties on ROxford.
+- Retraining with the true reward did not change RL's benchmark numbers much (ROxf+1M M 59.01 -> 58.63, RPar+1M M 56.78 -> 58.73) and improved the supervised schedulers (value ROxf M 68.22 -> 69.70; classifier RPar+1M 59.05 -> 61.27).
+- Validation and benchmarks disagree again for the classifier (lowest on validation, best on RParis), as at B40 (Q7): the number of matches found (classifier 14.4 per query, RL 13.5, value 10.9) drives the re-query on RParis, and GLDv2 validation does not reward it.
+- **Conclusion so far:** learned scheduling of verification with expansion + re-query is a large, replicated gain over classic verified QE at the same budget (+4 to +8 mAP); within that pipeline RL is best on validation but not distinguishable from the supervised schedulers on the benchmarks (one seed, one policy seed).
+
 ### Q11. Policy-chosen verifications + verified-QE re-query (2026-10-24)
 Job 4664543 (45 min; `scripts/analysis/qe_policy_vqe.py`, summary `scripts/analysis/qe_policy_vqe_summary.py`, `results/qe/policy_vqe/<descriptor>.json`). The saved B = 20 policies of Q5 / Q8 (configs selected on validation; trained with the promote-only reward, not retrained) choose the 20 verifications; all verified matches feed the verified-QE re-query of Q10 (alpha = 0, chosen on GLDv2 validation). Sanity: 'shortlist' (the 20 most similar) reproduces classic verified QE (ResNet ROxf M 63.42; DINOv2 79.88 / 60.14 vs 60.11 in Q10, tie-breaking).
 

@@ -18,7 +18,7 @@ for m in methods:
                                  for p in pools for pr in ('medium', 'hard')))
 print('matches per query:', {m: round(float(np.mean([r['pools'][pools[0]][m].get('n_matched', np.nan) for r in runs])), 2)
                              for m in methods if m != 'none'})
-for a, b in (('rl', 'shortlist'), ('rl', 'value'), ('value', 'shortlist'), ('rl', 'top')):
+for a, b in (('rl', 'shortlist'), ('rl', 'value'), ('rl', 'classifier'), ('value', 'shortlist'), ('rl', 'top')):
     if a not in methods or b not in methods:
         continue
     for p in pools:
