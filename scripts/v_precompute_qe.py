@@ -127,7 +127,9 @@ def pad(rows, fill, width=None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--data_root', required=True, help='staged gldv2c, gldv2d, roxford5k, rparis6k')
-    ap.add_argument('--model', required=True)
+    ap.add_argument('--model', default=None)
+    ap.add_argument('--emb_dir', default=None, help='precomputed embeddings instead of --model (gld_pool.npy, '
+                    '<bench>_q.npy, <bench>_db.npy; distractors via --dist_emb, R1M via --r1m_emb)')
     ap.add_argument('--plain_pre', required=True)
     ap.add_argument('--dist_pre', required=True)
     ap.add_argument('--r1m_pre', required=True)
@@ -148,16 +150,21 @@ def main():
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     root = Path(a.data_root)
     t0 = time.time()
-    model = create_model_from_checkpoint(a.model, dev).eval()
-    log = {'model': a.model, 'k': a.k, 'hops': a.hops, 'cap': a.cap, 'threshold': a.threshold}
+    model = create_model_from_checkpoint(a.model, dev).eval() if a.emb_dir is None else None
+    E = Path(a.emb_dir) if a.emb_dir else None
+    log = {'model': a.model, 'emb_dir': a.emb_dir, 'k': a.k, 'hops': a.hops, 'cap': a.cap, 'threshold': a.threshold}
     tmp = Path(os.environ['TMPDIR'])
 
     # ---- GLDv2 val pool (+ distractors)
     if any(p.startswith('gldv2c') for p in a.pools):
         _, val = load_gldv2c(str(root / 'gldv2c'), val_transform=get_transforms(512, 'eval'))
-        with torch.no_grad():
-            emb, _ = extract_embeddings(model, val, dev, batch_size=64, num_workers=a.workers)
+        if E is not None:
+            emb = torch.from_numpy(np.load(E / 'gld_pool.npy').astype(np.float32)).to(dev)
+        else:
+            with torch.no_grad():
+                emb, _ = extract_embeddings(model, val, dev, batch_size=64, num_workers=a.workers)
         labels = np.asarray(val.labels); n_pool = len(labels)
+        assert emb.shape[0] == n_pool
         pool_paths = [str(Path(val.image_root) / p) for p in val.image_paths]
         import pickle
         d_ids = pickle.load(open(root / 'gldv2d' / 'gldv2d.pkl', 'rb'))['cids']
@@ -219,8 +226,12 @@ def main():
         if name not in a.pools and name + '_r1m' not in a.pools:
             continue
         h = RevisitedDataset(str(root / name), name)
-        Qe = torch.from_numpy(embed(model, h.get_query_dataset(tf), dev, a.workers)).to(dev)
-        Gd = torch.from_numpy(embed(model, h.get_database_dataset(tf), dev, a.workers)).to(dev)
+        if E is not None:
+            Qe = torch.from_numpy(np.load(E / f'{name}_q.npy').astype(np.float32)).to(dev)
+            Gd = torch.from_numpy(np.load(E / f'{name}_db.npy').astype(np.float32)).to(dev)
+        else:
+            Qe = torch.from_numpy(embed(model, h.get_query_dataset(tf), dev, a.workers)).to(dev)
+            Gd = torch.from_numpy(embed(model, h.get_database_dataset(tf), dev, a.workers)).to(dev)
         crops = []
         (tmp / 'qe_crops' / name).mkdir(parents=True, exist_ok=True)
         for i, (img_name, e) in enumerate(zip(h.cfg['query_images'], h.cfg['gnd'])):

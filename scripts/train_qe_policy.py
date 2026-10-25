@@ -123,6 +123,7 @@ def main():
                     help='train and select with the verified-QE re-query AP (training/qe_requery.py); needs '
                          '--data_root (staged gldv2c), --model and --dist_emb')
     ap.add_argument('--data_root'); ap.add_argument('--model'); ap.add_argument('--dist_emb')
+    ap.add_argument('--emb_pool', default=None, help='precomputed val-pool embeddings (.npy) instead of --model')
     ap.add_argument('--requery_M', type=int, default=1000)
     ap.add_argument('--budgets', type=int, nargs='+', default=[10, 20, 40])
     ap.add_argument('--threshold', type=int, default=35)
@@ -153,11 +154,15 @@ def main():
         from evaluate import create_model_from_checkpoint
         from evaluation.sfm_val import extract_embeddings
         from training.qe_requery import build as build_requery
-        net = create_model_from_checkpoint(a.model, dev).eval()
         _, val = load_gldv2c(str(Path(a.data_root) / 'gldv2c'), val_transform=get_transforms(512, 'eval'))
-        with torch.no_grad():
-            emb, _ = extract_embeddings(net, val, dev, batch_size=64, num_workers=16)
-        emb = F.normalize(emb.float(), dim=1); del net
+        if a.emb_pool:
+            emb = torch.from_numpy(np.load(a.emb_pool).astype(np.float32)).to(dev)
+        else:
+            net = create_model_from_checkpoint(a.model, dev).eval()
+            with torch.no_grad():
+                emb, _ = extract_embeddings(net, val, dev, batch_size=64, num_workers=16)
+            del net
+        emb = F.normalize(emb.float(), dim=1)
     for name in a.train_pools:
         d, z = load_pool(pre / f'{name}.npz', dev)
         if a.requery_reward:
