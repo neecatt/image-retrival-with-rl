@@ -81,6 +81,8 @@ def extract(model, loader, dev, amp, n=None, with_index=False):
     t0 = time.time()
     for k, batch in enumerate(loader):
         x = batch[0] if with_index else batch
+        if x.dim() == 3:                                     # loader without batching: one image at a time
+            x = x.unsqueeze(0)
         with torch.autocast('cuda', dtype=torch.float16, enabled=amp):
             d = model.extract_global_descriptor(x.to(dev), True, True, True, 3)
         feats.append(F.normalize(d.float().reshape(1, -1), dim=1).cpu())
@@ -132,7 +134,9 @@ def main():
     sd = torch.load(a.weights, map_location='cpu')['model_state']
     missing, unexpected = model.load_state_dict({k.replace('globalmodel', 'encoder_q'): v for k, v in sd.items()}, strict=False)
     enc_missing = [k for k in missing if k.startswith('encoder_q')]
-    print(f"weights: {len(sd)} tensors; encoder_q keys missing: {len(enc_missing)} {enc_missing[:5]}; unexpected: {len(unexpected)}", flush=True)
+    # seb1 / seb2 / sefc exist in SuperGlobal's ResNet but are unused in its forward pass (model/resnet.py)
+    assert all(k.split('.')[1] in ('seb1', 'seb2', 'sefc') for k in enc_missing), enc_missing
+    print(f"weights: {len(sd)} tensors; encoder_q keys missing (unused layers): {enc_missing}; unexpected: {len(unexpected)}", flush=True)
     model = model.to(dev).eval()
     res = {'weights': a.weights, 'depth': a.depth, 'amp': a.amp, 'encoder_missing': enc_missing}
 
