@@ -11,6 +11,7 @@ Strong base for budgeted verification. Official SuperGlobal code (MIT, cloned to
 | ours, fp32 | 85.32 / 72.74 | 90.91 / 80.33 | 92.24 / 83.79 | 93.37 / 86.84 |
 | ours, fp16 autocast | 85.32 / 72.73 | 90.91 / 80.35 | 92.24 / 83.78 | 93.37 / 86.83 |
 
+- **R1M (job 4702805, 5.2 h, 3 processes on one GPU, fp16; 1,001,001 images, 63 truncated decoded with padding):** ROxf+1M global **78.70 / 62.57** (paper 78.8 / 61.9), rerank **84.04 / 70.87** (84.4 / 71.1); RPar+1M global **83.79 / 69.01** (83.9 / 69.1), rerank **85.75 / 72.81** (84.9 / 71.4). Descriptors cached in `/home/atuin/b268dc/b268dc21/datasets/superglobal/rn101/amp` (r1m.npy fp16, benchmark q/db).
 - **Reproduced** (Medium within 0.1, Hard +0.1 to +0.6). fp16 is identical but not faster (~38 img/s, GPU 51-76% busy: latency-bound at one image per step), so R1M (job 4702805) runs 3 extraction processes on one GPU, fp16, then merges and evaluates +1M (paper: global 78.8 / 61.9 ROxf+1M, 83.9 / 69.1 RPar+1M; rerank 84.4 / 71.1, 84.9 / 71.4).
 
 ### Q13. Re-query reward over 5 descriptor seeds (2026-10-24)
