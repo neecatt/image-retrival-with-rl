@@ -53,8 +53,8 @@ class Bench(Dataset):
 
 
 class R1M(IterableDataset):
-    def __init__(self, r1m_dir, index):
-        self.files = [Path(r1m_dir) / 'raw' / f'revisitop1m.{i}.tar.gz' for i in range(1, 101)]
+    def __init__(self, r1m_dir, index, shard=0, nshards=1):
+        self.files = [Path(r1m_dir) / 'raw' / f'revisitop1m.{i}.tar.gz' for i in range(1, 101)][shard::nshards]
         self.index = index
 
     def __iter__(self):
@@ -92,9 +92,7 @@ def extract(model, loader, dev, amp, n=None, with_index=False):
             print(f"  R1M {k} images, {k / max(time.time() - t0, 1):.1f} img/s", flush=True)
     f = torch.cat(feats)
     if with_index:
-        out = torch.zeros(n, f.shape[1])
-        out[torch.as_tensor(idxs)] = f
-        return out, ntr, len(set(idxs))
+        return f, torch.as_tensor(idxs), ntr
     return f
 
 
@@ -122,6 +120,7 @@ def main():
     ap.add_argument('--r1m', action='store_true', help='also extract / load R1M and evaluate +1M')
     ap.add_argument('--amp', action='store_true', help='fp16 autocast for extraction')
     ap.add_argument('--workers', type=int, default=16)
+    ap.add_argument('--r1m_shard', default=None, help='k/n: extract only R1M archives k::n into r1m_part<k>.pt and exit')
     ap.add_argument('--out', required=True)
     a = ap.parse_args()
     dev = torch.device('cuda')
@@ -140,22 +139,30 @@ def main():
     model = model.to(dev).eval()
     res = {'weights': a.weights, 'depth': a.depth, 'amp': a.amp, 'encoder_missing': enc_missing}
 
+    names = [l.strip() for l in open(Path(a.r1m_dir) / 'revisitop1m.txt') if l.strip()]
+    if a.r1m_shard:                                                  # one shard of the R1M archives, then exit
+        k, n = map(int, a.r1m_shard.split('/'))
+        loader = DataLoader(R1M(a.r1m_dir, {nm: i for i, nm in enumerate(names)}, k, n), batch_size=None, num_workers=a.workers)
+        t0 = time.time()
+        f, idx, ntr = extract(model, loader, dev, a.amp, with_index=True)
+        torch.save({'feats': f.half(), 'idx': idx, 'truncated': ntr, 'minutes': (time.time() - t0) / 60}, out / f'r1m_part{k}.pt')
+        print(f'R1M shard {k}/{n}: {len(idx)} images, {ntr} truncated, {(time.time() - t0) / 60:.1f} min', flush=True)
+        return
     R = None
     if a.r1m:
         cache = out / 'r1m.npy'
-        if cache.exists():
-            R = torch.from_numpy(np.load(cache).astype(np.float32))
-        else:
-            names = [l.strip() for l in open(Path(a.r1m_dir) / 'revisitop1m.txt') if l.strip()]
-            loader = DataLoader(R1M(a.r1m_dir, {n: i for i, n in enumerate(names)}), batch_size=None, num_workers=a.workers)
-            t0 = time.time()
-            R, ntr, nseen = extract(model, loader, dev, a.amp, n=len(names), with_index=True)
-            if nseen != len(names):
-                raise RuntimeError(f"{len(names) - nseen} R1M images not found")
-            np.save(cache, R.half().numpy())
-            res['r1m'] = {'images': nseen, 'truncated': ntr, 'minutes': round((time.time() - t0) / 60, 1)}
-            print('R1M', res['r1m'], flush=True)
-        R = R.to(dev)
+        if not cache.exists():                                       # merge the shards
+            parts = sorted(out.glob('r1m_part*.pt'))
+            Rm = torch.zeros(len(names), 2048, dtype=torch.float16); seen = torch.zeros(len(names), dtype=torch.bool); ntr = 0
+            for p in parts:
+                d = torch.load(p)
+                Rm[d['idx']] = d['feats']; seen[d['idx']] = True; ntr += d['truncated']
+            if not seen.all():
+                raise RuntimeError(f"{int((~seen).sum())} R1M images missing after merging {len(parts)} shards")
+            np.save(cache, Rm.numpy())
+            res['r1m'] = {'images': int(seen.sum()), 'truncated': ntr, 'shards': len(parts)}
+            print('R1M merged', res['r1m'], flush=True)
+        R = torch.from_numpy(np.load(cache).astype(np.float32)).to(dev)
     mda, rmda = MDescAug(), RerankwMDA()
     for name in ('roxford5k', 'rparis6k'):
         h = RevisitedDataset(str(Path(a.data_root) / name), name)
