@@ -2,6 +2,17 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### S1. SuperGlobal reproduction, branch `feat/superglobal-verification` (2026-10-25)
+Strong base for budgeted verification. Official SuperGlobal code (MIT, cloned to `~/external/SuperGlobal`, commit 8694696, not vendored) + CVNet ResNet101 weights from the CVNet authors (Google Drive; no licence file in that repository, research evaluation only; `$HPCVAULT/external_weights/cvnet`, SHA256SUMS). `scripts/superglobal_eval.py` follows their preprocessing (OpenCV BGR, full resolution, query bbox crop with int(), BGR mean/std, 3 scales, GeM+ / rGeM / sGeM, ReLU-up on); the 6 encoder weights missing from the checkpoint (seb1 / seb2 / sefc) are unused in their forward pass. Job 4702382 (11 min):
+
+| RN101, M / H | ROxf global | ROxf + SuperGlobal rerank | RPar global | RPar + rerank |
+|---|---|---|---|---|
+| paper (Table 1) | 85.3 / 72.1 | 90.9 / 80.2 | 92.1 / 83.5 | 93.3 / 86.7 |
+| ours, fp32 | 85.32 / 72.74 | 90.91 / 80.33 | 92.24 / 83.79 | 93.37 / 86.84 |
+| ours, fp16 autocast | 85.32 / 72.73 | 90.91 / 80.35 | 92.24 / 83.78 | 93.37 / 86.83 |
+
+- **Reproduced** (Medium within 0.1, Hard +0.1 to +0.6). fp16 is identical but not faster (~38 img/s, GPU 51-76% busy: latency-bound at one image per step), so R1M (job 4702805) runs 3 extraction processes on one GPU, fp16, then merges and evaluates +1M (paper: global 78.8 / 61.9 ROxf+1M, 83.9 / 69.1 RPar+1M; rerank 84.4 / 71.1, 84.9 / 71.4).
+
 ### Q13. Re-query reward over 5 descriptor seeds (2026-10-24)
 Jobs 4673832-35 (seeds 1-4, ~2.6 h each, ~10.3 GPU-h) + Q12 (seed 42); same configs, policy seed 0, all three schedulers retrained with the re-query reward; exact full re-query on the benchmarks. Per-query differences averaged over the 5 seeds, bootstrap over queries; seeds+ = seeds with a positive mean (`results/qe/policy_vqe/newresnet_seed*_rq.json`, `scripts/analysis/qe_policy_vqe_summary.py`).
 
