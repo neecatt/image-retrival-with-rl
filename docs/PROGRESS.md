@@ -2,6 +2,9 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### S2. SuperGlobal stage 2: first attempt failed on thin images (2026-10-26)
+GLDv2 extraction 4712233 failed after 45 min in all three shards: SuperGlobal's regional GeM reflect-pads the stride-32 feature map by 2, and a very thin GLDv2 panorama (stored at long side 512) gives a 2 x 12 map at the 0.7071 scale. ROxford / RParis / R1M never reach that size. Fix: GLDv2 training images with a short side < 144 px are upscaled to 144 (aspect kept; count logged per shard); 144 x 512 / 512 x 144 / 150 x 150 checked through the RN101 model, 64 x 512 reproduces the error. Dependent jobs cancelled; chain resubmitted as 4749473 (extraction) -> 4749474 (shortlists) -> 4749475 (expansion) -> 4749476 (training + evaluation).
+
 ### S1. SuperGlobal reproduction, branch `feat/superglobal-verification` (2026-10-25)
 Strong base for budgeted verification. Official SuperGlobal code (MIT, cloned to `~/external/SuperGlobal`, commit 8694696, not vendored) + CVNet ResNet101 weights from the CVNet authors (Google Drive; no licence file in that repository, research evaluation only; `$HPCVAULT/external_weights/cvnet`, SHA256SUMS). `scripts/superglobal_eval.py` follows their preprocessing (OpenCV BGR, full resolution, query bbox crop with int(), BGR mean/std, 3 scales, GeM+ / rGeM / sGeM, ReLU-up on); the 6 encoder weights missing from the checkpoint (seb1 / seb2 / sefc) are unused in their forward pass. Job 4702382 (11 min):
 
