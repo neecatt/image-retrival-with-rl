@@ -2,6 +2,24 @@
 
 What was found, what was changed, and the evidence. Newest entries at the top. Milestone status lives in [ROADMAP.md](ROADMAP.md); this file keeps the detail.
 
+### S3. Budgeted verification + re-query on top of SuperGlobal (2026-10-27)
+Chain 4749473-76 (extraction 2.2 h: 931,121 images, 8,260 thin ones upscaled; shortlists 2.0 h: 43-55% of GLDv2 pairs and 68-96% of benchmark pairs reused from earlier descriptors, AP-table check 0 bad; expansion 0.9 h; training + evaluation 2.7 h). SuperGlobal RN101 descriptors (fp16), B = 20, one policy seed, scheduler configs transferred from the new-ResNet selection (not re-tuned), re-query reward; '+sgr' = SuperGlobal reranking (MDescAug + RerankwMDA, top 400) applied after the re-query with verified matches kept on top. Sanity: none = 78.70 / 62.57 and none+sgr = 84.04 / 70.87 on ROxf+1M (S1).
+
+| SuperGlobal RN101, B20, M / H | ROxf | ROxf+1M | RPar | RPar+1M |
+|---|---|---|---|---|
+| global | 85.32 / 72.73 | 78.70 / 62.57 | 92.24 / 83.78 | 83.79 / 69.01 |
+| + SuperGlobal rerank (published system) | 90.91 / **80.35** | 84.04 / 70.87 | 93.37 / 86.83 | 85.75 / 72.81 |
+| classic verified QE (20 most similar) | 88.77 / 75.58 | 85.04 / 70.24 | 93.58 / 86.39 | **88.71 / 77.46** |
+| classic verified QE + rerank | 90.91 / 79.35 | 87.60 / 73.93 | **94.21 / 88.01** | **88.85** / 77.26 |
+| classifier-scheduled + rerank | 90.44 / 77.62 | 86.30 / 71.17 | 93.87 / 87.66 | 88.40 / 76.59 |
+| **value-scheduled + rerank** | **90.99** / 79.85 | **89.36 / 76.16** | 93.87 / 87.53 | 87.98 / 75.99 |
+| RL-scheduled + rerank | 90.67 / 78.44 | 89.09 / 74.53 | 93.37 / 86.40 | 87.45 / 74.70 |
+
+- **On top of a reproduced state-of-the-art system, 20 verifications + verified-QE re-query + SuperGlobal reranking improve ROxford+1M by +5.3 / +5.3 (value-scheduled: 89.36 / 76.16 vs 84.04 / 70.87) and RParis+1M by +3.1 / +4.5 (classic verified QE + rerank: 88.85 / 77.26 vs 85.75 / 72.81)**; on ROxford / RParis without distractors the gain is <= +0.8.
+- Learned scheduling vs classic verified QE (without rerank): value ROxf+1M +2.34* / +2.82*, RL +1.79 / +1.19 (n.s.); both lose ~1 mAP on RParis(+1M) (significant).
+- **RL is worse than the value scheduler on this descriptor** (ROxf -1.49* / -2.77*, ROxf+1M -0.55* / -1.63*, RPar -0.49* / -1.03*); RL beats the classifier on ROxf+1M (+2.55* / +2.99*). One descriptor, one policy seed, hyperparameters transferred from ResNet.
+- Cost: 20 local-feature verifications per query (~0.1 s at ~200 pairs/s) on top of SuperGlobal's ~0.4 ms reranking; far below CVNet's learned reranking (~24 s for the top 400, Shao et al. Table 2).
+
 ### S2. SuperGlobal stage 2: first attempt failed on thin images (2026-10-26)
 GLDv2 extraction 4712233 failed after 45 min in all three shards: SuperGlobal's regional GeM reflect-pads the stride-32 feature map by 2, and a very thin GLDv2 panorama (stored at long side 512) gives a 2 x 12 map at the 0.7071 scale. ROxford / RParis / R1M never reach that size. Fix: GLDv2 training images with a short side < 144 px are upscaled to 144 (aspect kept; count logged per shard); 144 x 512 / 512 x 144 / 150 x 150 checked through the RN101 model, 64 x 512 reproduces the error. Dependent jobs cancelled; chain resubmitted as 4749473 (extraction) -> 4749474 (shortlists) -> 4749475 (expansion) -> 4749476 (training + evaluation).
 
