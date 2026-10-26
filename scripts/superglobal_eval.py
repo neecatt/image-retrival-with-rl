@@ -27,6 +27,7 @@ from data.dataset import RevisitedDataset                                       
 from evaluation.revisited_ap import official_ap                                 # noqa: E402
 
 MEAN, SD = [0.406, 0.456, 0.485], [0.225, 0.224, 0.229]                          # BGR order, as SuperGlobal
+MIN_SIDE = 144                     # smallest short side that keeps every rGeM map >= 3 px at all three scales
 
 
 def prep(im_bgr):
@@ -62,7 +63,16 @@ class Files(Dataset):
 
     def __getitem__(self, i):
         j = self.ids[i]
-        return prep(cv2.imread(self.paths[j])), j, 0
+        im = cv2.imread(self.paths[j])
+        h, w = im.shape[:2]
+        small = 0
+        if min(h, w) < MIN_SIDE:
+            # SuperGlobal's regional GeM reflect-pads the stride-32 map by 2, which fails if the map is < 3
+            # pixels at the 0.7071 scale; very thin panoramas are upscaled to a short side of MIN_SIDE
+            f = MIN_SIDE / min(h, w)
+            im = cv2.resize(im, (max(MIN_SIDE, round(w * f)), max(MIN_SIDE, round(h * f))), interpolation=cv2.INTER_LINEAR)
+            small = 1
+        return prep(im), j, small
 
 
 class R1M(IterableDataset):
@@ -174,9 +184,9 @@ def main():
         k, n = map(int, a.gld_shard.split('/'))
         ids = list(range(len(paths)))[k::n]
         t0 = time.time()
-        f, idx, _ = extract(model, DataLoader(Files(paths, ids), batch_size=None, num_workers=a.workers), dev, a.amp, with_index=True)
-        torch.save({'feats': f.half(), 'idx': idx}, out / f'gld_part{k}.pt')
-        print(f'GLDv2 shard {k}/{n}: {len(idx)} images, {(time.time() - t0) / 60:.1f} min', flush=True)
+        f, idx, n_small = extract(model, DataLoader(Files(paths, ids), batch_size=None, num_workers=a.workers), dev, a.amp, with_index=True)
+        torch.save({'feats': f.half(), 'idx': idx, 'upscaled': n_small}, out / f'gld_part{k}.pt')
+        print(f'GLDv2 shard {k}/{n}: {len(idx)} images, {n_small} thin images upscaled, {(time.time() - t0) / 60:.1f} min', flush=True)
         return
     names = [l.strip() for l in open(Path(a.r1m_dir) / 'revisitop1m.txt') if l.strip()]
     if a.r1m_shard:                                                  # one shard of the R1M archives, then exit
